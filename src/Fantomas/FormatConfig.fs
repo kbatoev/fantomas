@@ -156,7 +156,7 @@ type internal Context =
         { x with Writer = writer; Config = config }
 
 let internal dump (ctx: Context) =
-    ctx.Writer.InnerWriter.ToString()
+    String.removeWhitespaces (ctx.Writer.InnerWriter.ToString())
 
 // A few utility functions from https://github.com/fsharp/powerpack/blob/master/src/FSharp.Compiler.CodeDom/generator.fs
 
