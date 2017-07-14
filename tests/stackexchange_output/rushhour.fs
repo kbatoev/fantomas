@@ -95,37 +95,59 @@ let test (initialState : State) (brickInfo : Brick [])
       if rowID = 0 then None
       else Some((rowID - 1, columnID), (rowID - 1, columnID))
     
-    if depth < 7 && not (isDuplicated mySet) 
-       && (let (_, columnLeft) = currentState.[0]
-           [| columnLeft + redLength..columnNum - 1 |]
-           |> Array.forall (fun columnID -> checkVacancy (redRowNum, columnID)) 
-           || horizontalBricksAll
-              |> Seq.tryFind (fun elem -> 
-                   (match generateRight elem with
-                    | Some(a, b) when checkVacancy a -> 
-                      solveDFS (generateState elem b) (elem, Right) (depth + 1)
-                    | _ -> false) || (match generateLeft elem with
-                                      | Some(a, b) when checkVacancy a -> 
-                                        solveDFS (generateState elem b) 
-                                          (elem, Left) (depth + 1)
-                                      | _ -> false))
-              |> Option.isSome || verticalBricksAll
-                                  |> Seq.tryFind (fun elem -> 
-                                       (match generateUp elem with
-                                        | Some(a, b) when checkVacancy a -> 
-                                          solveDFS (generateState elem b) 
-                                            (elem, Up) (depth + 1)
-                                        | _ -> false) || (match generateDown 
+    if depth < 7 && not (isDuplicated mySet) && (let (_, columnLeft) = 
+                                                   currentState.[0]
+                                                 [| columnLeft + redLength..columnNum 
+                                                                            - 1 |]
+                                                 |> Array.forall 
+                                                      (fun columnID -> 
+                                                      checkVacancy 
+                                                        (redRowNum, columnID))
+                                                 || horizontalBricksAll
+                                                    |> Seq.tryFind (fun elem -> 
+                                                         (match generateRight 
                                                                   elem with
                                                           | Some(a, b) when checkVacancy 
                                                                               a -> 
                                                             solveDFS 
                                                               (generateState 
                                                                  elem b) 
-                                                              (elem, Down) 
+                                                              (elem, Right) 
                                                               (depth + 1)
-                                                          | _ -> false))
-                                  |> Option.isSome)
+                                                          | _ -> false)
+                                                         || (match generateLeft 
+                                                                     elem with
+                                                             | Some(a, b) when checkVacancy 
+                                                                                 a -> 
+                                                               solveDFS 
+                                                                 (generateState 
+                                                                    elem b) 
+                                                                 (elem, Left) 
+                                                                 (depth + 1)
+                                                             | _ -> false))
+                                                    |> Option.isSome
+                                                 || verticalBricksAll
+                                                    |> Seq.tryFind (fun elem -> 
+                                                         (match generateUp elem with
+                                                          | Some(a, b) when checkVacancy 
+                                                                              a -> 
+                                                            solveDFS 
+                                                              (generateState 
+                                                                 elem b) 
+                                                              (elem, Up) 
+                                                              (depth + 1)
+                                                          | _ -> false)
+                                                         || (match generateDown 
+                                                                     elem with
+                                                             | Some(a, b) when checkVacancy 
+                                                                                 a -> 
+                                                               solveDFS 
+                                                                 (generateState 
+                                                                    elem b) 
+                                                                 (elem, Down) 
+                                                                 (depth + 1)
+                                                             | _ -> false))
+                                                    |> Option.isSome)
     then 
       Console.WriteLine
         ("Brick Name {0} Direction {1}", fst brickInfo.[lastBrick], 

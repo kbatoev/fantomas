@@ -1,6 +1,4 @@
 /// The program is from http://codereview.stackexchange.com/q/2665
-module Comments
-
 open System.IO
 
 type Comment = 

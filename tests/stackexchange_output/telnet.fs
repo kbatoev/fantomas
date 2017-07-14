@@ -1,6 +1,4 @@
 /// The program is from http://codereview.stackexchange.com/q/15364
-module Telnet
-
 open System
 open System.Net.Sockets
 
@@ -10,7 +8,8 @@ let rec asyncSendInput (stream : NetworkStream) =
   async { 
     let! input = asyncGetInput
     stream.WriteByte
-    |> Array.map <| input
+    |> Array.map
+    <| input
     |> ignore
     do! asyncSendInput stream
   }

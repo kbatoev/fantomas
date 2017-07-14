@@ -1,6 +1,4 @@
 /// The program is from http://codereview.stackexchange.com/q/20955
-namespace Katas
-
 open System.Linq
 
 module NaturalSortKata = 

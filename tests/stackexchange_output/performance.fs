@@ -1,6 +1,4 @@
 /// The program is from http://codereview.stackexchange.com/q/20068
-module Performance
-
 open System
 open System.Drawing
 open System.IO

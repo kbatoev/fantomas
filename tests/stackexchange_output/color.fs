@@ -1,6 +1,4 @@
 /// The program is from http://codereview.stackexchange.com/q/21374
-module Color
-
 open System.IO
 open System.Net
 
@@ -24,7 +22,8 @@ type MyFSColorTable() =
     |> Seq.skip 1
     |> Seq.map (fun line -> line.Split([| '\t' |]))
     |> Seq.filter (fun values -> values
-                                 |> Seq.length = 3)
+                                 |> Seq.length
+                                 = 3)
     |> Seq.map (fun values -> string values.[0], string values.[2])
     |> Seq.map (fun (rgb, name) -> rgb.Split([| ' ' |]), name)
     |> Seq.map (fun (rgb, name) -> [| name, rgb.[0], rgb.[1], rgb.[2] |])
