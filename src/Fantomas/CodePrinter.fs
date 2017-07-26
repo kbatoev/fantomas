@@ -587,7 +587,7 @@ and genExpr astContext = function
                              ifElse (startWith "elif" r ctx) (!+ "elif ") (!+ "else if ")
                              +> ifElse (checkBreakForExpr e1) (genExpr astContext e1 ++ "then") (genExpr astContext e1 +- "then") 
                              -- " " +> preserveBreakNln astContext e2) ctx
-            ++ "else " +> preserveBreakNln astContext en)
+            +> ifElse (e1.Range.StartLine = en.Range.EndLine) sepSpace sepNln +> str "else " +> preserveBreakNln astContext en)
 
     | IfThenElse(e1, e2, None) -> 
         atCurrentColumn (!- "if " +> ifElse (checkBreakForExpr e1) (genExpr astContext e1 ++ "then") (genExpr astContext e1 +- "then") 
