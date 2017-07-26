@@ -30,14 +30,17 @@ type FormatConfig =
       ReorderOpenDeclaration : bool;
       SpaceAroundDelimiter : bool;
       /// Prettyprinting based on ASTs only
-      StrictMode : bool }
+      StrictMode : bool;
+      /// Divide pat in new lines or not; if None, decision is taken by ranges of patterns and PageWidth
+      IsOrPatDividedWithNLn : bool option }
 
     static member Default = 
         { IndentSpaceNum = 4; PageWidth = 80;
           SemicolonAtEndOfLine = false; SpaceBeforeArgument = true; SpaceBeforeColon = true;
           SpaceAfterComma = true; SpaceAfterSemicolon = true; 
           IndentOnTryWith = false; ReorderOpenDeclaration = false; 
-          SpaceAroundDelimiter = true; StrictMode = false }
+          SpaceAroundDelimiter = true; StrictMode = false;
+          IsOrPatDividedWithNLn = None }
 
     static member create(indentSpaceNum, pageWith, semicolonAtEndOfLine, 
                          spaceBeforeArgument, spaceBeforeColon, spaceAfterComma, 
@@ -345,6 +348,20 @@ let internal sepOpenT = !- "("
 
 /// closing token of tuple
 let internal sepCloseT = !- ")"
+
+/// separating patterns of kind: | Case1 | Case2
+let internal sepPatternsInPatOr arePatternsOnTheSameLine f (ctx : Context) =
+  match ctx.Config.IsOrPatDividedWithNLn, arePatternsOnTheSameLine with
+  | Some true, _
+  | None, false   -> (sepNln +> !- "| ") ctx
+
+  | _ -> use colWriter = new ColumnIndentedTextWriter(new StringWriter())
+         let dummyCtx = ctx.With(colWriter)
+         let col = ((!- " | " +> f) dummyCtx).Writer.Column
+         // perhaps we can use already generated text inside dummyCtx
+         if col > ctx.Config.PageWidth
+         then (sepNln +> !- "| ") ctx
+         else (!- " | ") ctx
 
 /// Set a checkpoint to break at an appropriate column
 let internal autoNln f (ctx : Context) =

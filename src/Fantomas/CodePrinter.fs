@@ -30,16 +30,13 @@ type ASTContext =
       IsFirstTypeParam: bool
       /// Check whether the context is inside DotGet to suppress whitespaces
       IsInsideDotGet: bool
-      /// Divide pat in new lines or not, if not specified it is evaluated with pat.Range
-      IsPatDividedWithNLn : bool option
     }
     static member Default =
         { TopLevelModuleName = "" 
           IsFirstChild = false; IsInterface = false 
           IsCStylePattern = false; IsNakedRange = false
           HasVerticalBar = false; IsUnionField = false
-          IsFirstTypeParam = false; IsInsideDotGet = false;
-          IsPatDividedWithNLn = None}
+          IsFirstTypeParam = false; IsInsideDotGet = false }
 
 let rec addSpaceBeforeParensInFunCall functionOrMethod arg = 
     match functionOrMethod, arg with
@@ -1074,11 +1071,7 @@ and genPatWithIdent astContext (ido, p) =
 and genPat astContext = function
     | PatOptionalVal(s) -> !- (sprintf "?%s" s)
     | PatAttrib(p, ats) -> genOnelinerAttributes astContext ats +> genPat astContext p
-    | PatOr(p1, p2) -> let newAstContext = match astContext.IsPatDividedWithNLn with
-                                           | None -> {astContext with IsPatDividedWithNLn = Some (p1.Range.EndLine <> p2.Range.StartLine)}
-                                           | _    -> astContext
-                       let isDivided = newAstContext.IsPatDividedWithNLn.Value
-                       genPat newAstContext p1 +> ifElse isDivided (sepNln +> !- "| ") (!- " | ") +> genPat newAstContext p2
+    | PatOr(p1, p2) -> genPat astContext p1 +> sepPatternsInPatOr (p1.Range.EndLine = p2.Range.StartLine) (genPat astContext p2) +> genPat astContext p2
     | PatAnds(ps) -> col (!- " & ") ps (genPat astContext)
     | PatNullary PatNull -> !- "null"
     | PatNullary PatWild -> sepWild
