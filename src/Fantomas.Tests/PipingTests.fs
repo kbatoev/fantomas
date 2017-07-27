@@ -19,10 +19,10 @@ let f x =
     |> prepend newline
     |> should equal """
 let f x = 
-    someveryveryveryverylongexpression 
+    someveryveryveryverylongexpression
     <|> if someveryveryveryverylongexpression then 
             someveryveryveryverylongexpression
-        else someveryveryveryverylongexpression 
+        else someveryveryveryverylongexpression
     <|> if someveryveryveryverylongexpression then 
             someveryveryveryverylongexpression
         else someveryveryveryverylongexpression

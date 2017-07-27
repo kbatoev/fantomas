@@ -72,10 +72,7 @@ open System.Collections.Generic
 // comment1
 let sortAndDedup by l = 
     // comment2
-    l
-    |> Seq.distinctBy by
-    |> Seq.sortBy by
-    |> List.ofSeq
+    l |> Seq.distinctBy by |> Seq.sortBy by |> List.ofSeq
 """
 
 [<Test>]
