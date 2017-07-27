@@ -63,3 +63,13 @@ let runAll() =
     |> Async.RunSynchronously
     |> ignore
 """
+
+[<Test>]
+let ``should not break one-linear pipes into multiple lines``() =
+    formatSourceString false """
+let hundred = [1..10] |> List.map (fun x -> x * x) |> List.rev |> List.head""" config
+    |> prepend newline
+    |> should equal """
+let hundred =
+    [ 1..10 ] |> List.map (fun x -> x * x) |> List.rev |> List.head
+"""
