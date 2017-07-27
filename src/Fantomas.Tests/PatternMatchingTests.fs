@@ -89,6 +89,40 @@ let detectZeroAND point =
 """
 
 [<Test>]
+let ``should preserve break new lines in or patterns `` () =
+    formatSourceString false """
+let f x =
+    match x with
+    | 0
+    | 1
+    | 2
+    | 3 -> printfn "x is less or equal than 3."
+    | _ -> printfn "x is more than 3."
+
+let g x =
+    match x with
+    | Case1 | Case2 | Case3 | Case4
+    | Case5 | Case6 | Case7 | Case8 -> true
+    | _ -> false
+"""  config
+    |> prepend newline
+    |> should equal """
+let f x = 
+    match x with
+    | 0
+    | 1
+    | 2
+    | 3 -> printfn "x is less or equal than 3."
+    | _ -> printfn "x is more than 3."
+
+let g x = 
+    match x with
+    | Case1 | Case2 | Case3 | Case4
+    | Case5 | Case6 | Case7 | Case8 -> true
+    | _ -> false
+"""
+
+[<Test>]
 let ``paren and tuple patterns``() =
     formatSourceString false """
 let countValues list value =
