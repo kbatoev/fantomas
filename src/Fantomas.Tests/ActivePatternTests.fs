@@ -49,8 +49,7 @@ let (|ParseRegex|_|) regex str =
     |> prepend newline
     |> should equal """
 let (|Even|Odd|) input = 
-    if input % 2 = 0 then Even
-    else Odd
+    if input % 2 = 0 then Even else Odd
 
 let (|Integer|_|) (str : string) = 
     let mutable intvalue = 0
