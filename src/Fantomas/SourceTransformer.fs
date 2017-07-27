@@ -87,9 +87,12 @@ let rec multiline = function
     // Default mode is single-line
     | _ -> false
 
-let checkNewLine e es = 
+let checkNewLine (e : Ast.SynExpr) (es : (string * Ast.SynExpr) list) =
     match es with
-    | (s, _) :: _ :: _ -> NewLineInfixOps.Contains s
+    | (s, _) :: _ :: _ -> // we can write multiline infix operators in one line if they were initially one-linear and length of expr isn't too big
+                          if NewLineInfixOps.Contains s
+                          then e.Range.StartLine <> (es |> List.rev |> List.head |> snd).Range.EndLine
+                          else false
     | _ -> multiline e
 
 /// Check if the expression already has surrounding parentheses

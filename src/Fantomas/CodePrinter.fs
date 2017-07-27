@@ -642,7 +642,7 @@ and genInfixApps astContext hasNewLine = function
         (ifElse hasNewLine (sepNln -- s +> sepSpace +> genExpr astContext e)
            (ifElse (NoSpaceInfixOps.Contains s) (!- s +> autoNln (genExpr astContext e))
               (ifElse (NoBreakInfixOps.Contains s) (sepSpace -- s +> sepSpace +> genExpr astContext e)
-                (sepSpace +> autoNln (!- s +> sepSpace +> genExpr astContext e)))))
+                (autoNlnOrSpace (!- s +> sepSpace +> genExpr astContext e)))))
         +> genInfixApps astContext (hasNewLine || checkNewLine e es) es
 
     | [] -> sepNone
