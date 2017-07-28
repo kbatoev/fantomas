@@ -362,6 +362,18 @@ let internal autoNln f (ctx : Context) =
     else
         f ctx
 
+let internal autoNlnOrSpace f (ctx : Context) =
+    if not ctx.BreakLines then f (sepSpace ctx) else
+    // Create a dummy context to evaluate length of current operation
+    use colWriter = new ColumnIndentedTextWriter(new StringWriter())
+    let dummyCtx = ctx.With(colWriter)
+    let col = (f dummyCtx).Writer.Column
+    // This isn't accurate if we go to new lines
+    if col + 1 > ctx.Config.PageWidth then
+        f (sepNln ctx)
+    else
+        f (sepSpace ctx)
+
 /// Similar to col, skip auto newline for index 0
 let internal colAutoNlnSkip0i f' (c : seq<'T>) f (ctx : Context) = 
     coli f' c (fun i c -> if i = 0 then f i c else autoNln (f i c)) ctx

@@ -251,9 +251,16 @@ and breakNln astContext brk e =
     ifElse brk (indent +> sepNln +> genExpr astContext e +> unindent) 
         (indent +> autoNln (genExpr astContext e) +> unindent)
 
+and breakNlnOrAddSpace astContext brk e =
+    ifElse brk (indent +> sepNln +> genExpr astContext e +> unindent)
+        (indent +> autoNlnOrSpace (genExpr astContext e) +> unindent)
+
 /// Preserve a break even if the expression is a one-liner
 and preserveBreakNln astContext e ctx = 
     breakNln astContext (checkPreserveBreakForExpr e ctx) e ctx
+
+and preserveBreakNlnOrAddSpace astContext e ctx =
+    breakNlnOrAddSpace astContext (checkPreserveBreakForExpr e ctx) e ctx
 
 /// Break but doesn't indent the expression
 and noIndentBreakNln astContext e ctx = 
