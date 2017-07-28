@@ -41,7 +41,7 @@ let print_30_permut() =
 let print_30_permut() = 
     /// declare and initialize
     let permutation : int array = 
-        Array.init n (fun i -> 
+        Array.init n (fun i ->
             Console.Write(i + 1)
             i)
     permutation
@@ -61,7 +61,7 @@ let print_30_permut() =
 let print_30_permut() = 
     /// declare and initialize
     let permutation : int array = 
-        Array.init n (fun (i, j) -> 
+        Array.init n (fun (i, j) ->
             Console.Write(i + 1)
             i)
     permutation

@@ -49,7 +49,7 @@ printfn "%d %d %A" var1 var2 tuple1""" config
     |> should equal """
 let rangeTest testValue mid size = 
     match testValue with
-    | var1 when var1 >= mid - size / 2 && var1 <= mid + size / 2 -> 
+    | var1 when var1 >= mid - size / 2 && var1 <= mid + size / 2 ->
         printfn "The test value is in range."
     | _ -> printfn "The test value is out of range."
 
@@ -157,10 +157,10 @@ let RegisterControl(control : Control) =
 
 let ReadFromFile(reader : System.IO.StreamReader) = 
     match reader.ReadLine() with
-    | null -> 
+    | null ->
         printfn "\n"
         false
-    | line -> 
+    | line ->
         printfn "%s" line
         true
 """
@@ -199,7 +199,7 @@ with
 try 
     fst 
         (find 
-             (fun (s, (s', ty) : int * int) -> 
+             (fun (s, (s', ty) : int * int) ->
              s' = s0 && can (type_match ty ty0) []) (!the_interface))
 with Failure _ -> s0
 """

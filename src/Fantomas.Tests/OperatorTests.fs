@@ -82,7 +82,7 @@ let ``should pattern match on quotation expression``() =
     | _ -> ()""" config
     |> should equal """let rec print expr = 
     match expr with
-    | SpecificCall <@@ (+) @@> (_, _, exprList) -> 
+    | SpecificCall <@@ (+) @@> (_, _, exprList) ->
         print exprList.Head
         printf " + "
         print exprList.Tail.Head

@@ -169,7 +169,7 @@ let ``should indent fun blocks``() =
     let y = 1
     x""" config
     |> should equal """let f = 
-    fun x -> 
+    fun x ->
         let y = 1
         x
 """
@@ -250,7 +250,7 @@ type U =
     | X of int
 
 let f = 
-    fun x -> 
+    fun x ->
         match x with
         | X(x) -> x
 """
