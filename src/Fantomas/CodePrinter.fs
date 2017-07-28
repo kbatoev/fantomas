@@ -496,7 +496,7 @@ and genExpr astContext = function
     | DesugaredLambda(cps, e) -> 
         !- "fun " +>  col sepSpace cps (genComplexPats astContext) +> sepArrow +> preserveBreakNlnOrAddSpace astContext e
     | Paren(Lambda(e, sps)) ->
-        sepOpenT -- "fun " +> col sepSpace sps (genSimplePats astContext) +> sepArrow +> noIndentBreakNln astContext e +> sepCloseT
+        sepOpenT -- "fun " +> col sepSpace sps (genSimplePats astContext) +> sepArrow +> noIndentBreakNlnOrAddSpace astContext e +> sepCloseT
     // When there are parentheses, most likely lambda will appear in function application
     | Lambda(e, sps) -> 
         !- "fun " +> col sepSpace sps (genSimplePats astContext) +> sepArrow +> preserveBreakNlnOrAddSpace astContext e
@@ -864,8 +864,8 @@ and genType astContext outerBracket t =
         // Drop bracket around tuples before an arrow
         | TFun(TTuple ts, t) -> sepOpenT +> loopTTupleList ts +> sepArrow +> sepSpace +> loop t +> sepCloseT
         // Do similar for tuples after an arrow
-        | TFun(t, TTuple ts) -> sepOpenT +> loop t +> sepArrow +> loopTTupleList ts +> sepCloseT
-        | TFuns ts -> sepOpenT +> col sepArrow ts loop +> sepCloseT
+        | TFun(t, TTuple ts) -> sepOpenT +> loop t +> sepArrow +> sepSpace +> loopTTupleList ts +> sepCloseT
+        | TFuns ts -> sepOpenT +> col (sepArrow +> sepSpace) ts loop +> sepCloseT
         | TApp(t, ts, isPostfix) -> 
             let postForm = 
                 match ts with
