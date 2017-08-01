@@ -20,7 +20,7 @@
     <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
     <Name>Fantomas.Tests</Name>
     <SolutionDir Condition="$(SolutionDir) == '' Or $(SolutionDir) == '*Undefined*'">..\</SolutionDir>
-    <TargetFSharpCoreVersion>4.4.1.0</TargetFSharpCoreVersion>
+    <TargetFSharpCoreVersion>4.3.1.0</TargetFSharpCoreVersion>
     <TargetFrameworkProfile />
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
@@ -64,6 +64,58 @@
     </Otherwise>
   </Choose>
   <Import Project="$(FSharpTargetsPath)" Condition="Exists('$(FSharpTargetsPath)')" />
+  <ItemGroup>
+    <None Include="paket.references" />
+    <None Include="app.config" />
+    <Compile Include="FsUnit.fs" />
+    <Compile Include="TestHelpers.fs" />
+    <Compile Include="StringTests.fs" />
+    <Compile Include="CommentTests.fs" />
+    <Compile Include="OperatorTests.fs" />
+    <Compile Include="ComparisonTests.fs" />
+    <Compile Include="ControlStructureTests.fs" />
+    <Compile Include="PipingTests.fs" />
+    <Compile Include="ModuleTests.fs" />
+    <Compile Include="UnionTests.fs" />
+    <Compile Include="RecordTests.fs" />
+    <Compile Include="TypeDeclarationTests.fs" />
+    <Compile Include="InterfaceTests.fs" />
+    <Compile Include="ClassTests.fs" />
+    <Compile Include="SignatureTests.fs" />
+    <Compile Include="PatternMatchingTests.fs" />
+    <Compile Include="ActivePatternTests.fs" />
+    <Compile Include="QuotationTests.fs" />
+    <Compile Include="FunctionDefinitionTests.fs" />
+    <Compile Include="AttributeTests.fs" />
+    <Compile Include="DataStructureTests.fs" />
+    <Compile Include="CompilerDirectivesTests.fs" />
+    <Compile Include="ComputationExpressionTests.fs" />
+    <Compile Include="TypeProviderTests.fs" />
+    <Compile Include="VerboseSyntaxConversionTests.fs" />
+    <Compile Include="FormattingSelectionTests.fs" />
+    <Compile Include="FormattingSelectionOnlyTests.fs" />
+    <Compile Include="ValidationTests.fs" />
+    <Compile Include="FormattingPropertyTests.fs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="mscorlib" />
+    <Reference Include="nunit.core">
+      <HintPath>..\packages\NUnit.Runners.2.6.3\tools\lib\nunit.core.dll</HintPath>
+    </Reference>
+    <Reference Include="nunit.core.interfaces">
+      <HintPath>..\packages\NUnit.Runners.2.6.3\tools\lib\nunit.core.interfaces.dll</HintPath>
+    </Reference>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Numerics" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Fantomas\Fantomas.fsproj">
+      <Name>Fantomas</Name>
+      <Project>{919adf2d-df2e-4f4d-9f8b-0376346535c9}</Project>
+      <Private>True</Private>
+    </ProjectReference>
+  </ItemGroup>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.
   <Target Name="BeforeBuild">
@@ -104,8 +156,8 @@
       <ItemGroup>
         <Reference Include="FSharp.Core">
           <HintPath>..\..\packages\FSharp.Core\lib\net40\FSharp.Core.dll</HintPath>
-          <Paket>True</Paket>
           <Private>True</Private>
+          <Paket>True</Paket>
         </Reference>
       </ItemGroup>
     </When>
@@ -154,55 +206,4 @@
       </ItemGroup>
     </When>
   </Choose>
-  <ItemGroup>
-    <None Include="paket.references" />
-    <None Include="app.config" />
-    <Compile Include="FsUnit.fs" />
-    <Compile Include="TestHelpers.fs" />
-    <Compile Include="StringTests.fs" />
-    <Compile Include="CommentTests.fs" />
-    <Compile Include="OperatorTests.fs" />
-    <Compile Include="ComparisonTests.fs" />
-    <Compile Include="ControlStructureTests.fs" />
-    <Compile Include="PipingTests.fs" />
-    <Compile Include="ModuleTests.fs" />
-    <Compile Include="UnionTests.fs" />
-    <Compile Include="RecordTests.fs" />
-    <Compile Include="TypeDeclarationTests.fs" />
-    <Compile Include="InterfaceTests.fs" />
-    <Compile Include="ClassTests.fs" />
-    <Compile Include="SignatureTests.fs" />
-    <Compile Include="PatternMatchingTests.fs" />
-    <Compile Include="ActivePatternTests.fs" />
-    <Compile Include="QuotationTests.fs" />
-    <Compile Include="FunctionDefinitionTests.fs" />
-    <Compile Include="AttributeTests.fs" />
-    <Compile Include="DataStructureTests.fs" />
-    <Compile Include="CompilerDirectivesTests.fs" />
-    <Compile Include="ComputationExpressionTests.fs" />
-    <Compile Include="TypeProviderTests.fs" />
-    <Compile Include="VerboseSyntaxConversionTests.fs" />
-    <Compile Include="FormattingSelectionTests.fs" />
-    <Compile Include="FormattingSelectionOnlyTests.fs" />
-    <Compile Include="ValidationTests.fs" />
-    <Compile Include="FormattingPropertyTests.fs" />
-    <Content Include="packages.config" />
-  </ItemGroup>
-  <ItemGroup>
-    <Reference Include="mscorlib" />
-    <Reference Include="nunit.core">
-      <HintPath>..\packages\NUnit.Runners.2.6.3\tools\lib\nunit.core.dll</HintPath>
-    </Reference>
-    <Reference Include="nunit.core.interfaces">
-      <HintPath>..\packages\NUnit.Runners.2.6.3\tools\lib\nunit.core.interfaces.dll</HintPath>
-    </Reference>
-    <Reference Include="System" />
-    <Reference Include="System.Core" />
-    <Reference Include="System.Numerics" />
-    <ProjectReference Include="..\Fantomas\Fantomas.fsproj">
-      <Name>Fantomas</Name>
-      <Project>{919adf2d-df2e-4f4d-9f8b-0376346535c9}</Project>
-      <Private>True</Private>
-    </ProjectReference>
-  </ItemGroup>
 </Project>
