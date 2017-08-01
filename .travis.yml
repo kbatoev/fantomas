@@ -5,6 +5,7 @@ sudo: false  # use the new container-based Travis infrastructure
 branches:
   only:
     - master
+    - nlnSaving
 
 script: 
   - ./build.sh All
