@@ -70,6 +70,6 @@ let ``should not break one-linear pipes into multiple lines``() =
 let hundred = [1..10] |> List.map (fun x -> x * x) |> List.rev |> List.head""" config
     |> prepend newline
     |> should equal """
-let hundred =
+let hundred = 
     [ 1..10 ] |> List.map (fun x -> x * x) |> List.rev |> List.head
 """
