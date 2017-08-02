@@ -354,6 +354,7 @@ let internal sepPatternsInPatOr arePatternsOnTheSameLine f (ctx : Context) =
   match ctx.Config.IsOrPatDividedWithNLn, arePatternsOnTheSameLine with
   | Some true, _
   | None, false   -> (sepNln +> !- "| ") ctx
+  | Some false, _ -> !- " | " ctx
 
   | _ -> use colWriter = new ColumnIndentedTextWriter(new StringWriter())
          let dummyCtx = ctx.With(colWriter)
