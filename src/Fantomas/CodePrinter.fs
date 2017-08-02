@@ -517,7 +517,7 @@ and genExpr astContext = function
     // Handle spaces of infix application based on which category it belongs to
     | InfixApps(e, es) -> 
         // Only put |> on the same line in a very trivial expression
-        atCurrentColumn (genExpr astContext e +> genInfixApps astContext (checkNewLine e es) es)
+        fun ctx -> ctx |> atCurrentColumn (genExpr astContext e +> genInfixApps astContext (checkNewLine e es ctx) es)
 
     | TernaryApp(e1,e2,e3) -> 
         atCurrentColumn (genExpr astContext e1 +> !- "?" +> genExpr astContext e2 +> sepSpace +> !- "<-" +> sepSpace +> genExpr astContext e3)
@@ -643,7 +643,7 @@ and genInfixApps astContext hasNewLine = function
            (ifElse (NoSpaceInfixOps.Contains s) (!- s +> autoNln (genExpr astContext e))
               (ifElse (NoBreakInfixOps.Contains s) (sepSpace -- s +> sepSpace +> genExpr astContext e)
                 (autoNlnOrSpace (!- s +> sepSpace +> genExpr astContext e)))))
-        +> genInfixApps astContext (hasNewLine || checkNewLine e es) es
+        +> fun ctx -> ctx |> genInfixApps astContext (hasNewLine || checkNewLine e es ctx) es
 
     | [] -> sepNone
 
