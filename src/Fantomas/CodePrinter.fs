@@ -660,43 +660,52 @@ and genIndexers astContext = function
             genExpr astContext e +> ifElse es.IsEmpty sepNone (sepComma +> genIndexers astContext es)
     | _ -> sepNone
 
-and genTypeDefn astContext (TypeDef(ats, px, ao, tds, tcs, tdr, ms, s)) = 
+and genTypeDefn astContext ((TypeDef(ats, px, ao, tds, tcs, tdr, ms, s)) as td) ctx = 
     let typeName = 
         genPreXmlDoc px 
         +> ifElse astContext.IsFirstChild (genAttributes astContext ats -- "type ") 
             (!- "and " +> genOnelinerAttributes astContext ats) 
         +> opt sepSpace ao genAccess -- s
         +> genTypeParam astContext tds tcs
-
+    let wasInline = td.Range.Start.Line = td.Range.End.Line && td.Range.Start.Column <= ctx.Config.PageWidth
+                    && td.Range.End.Column <= ctx.Config.PageWidth && List.length ms = 0
     match tdr with
     | Simple(TDSREnum ecs) ->
-        typeName +> sepEq 
-        +> indent +> sepNln
-        +> col sepNln ecs (genEnumCase { astContext with HasVerticalBar = true })
-        +> genMemberDefnList { astContext with IsInterface = false } ms
-        // Add newline after un-indent to be spacing-correct
-        +> unindent
+        ctx |>
+        (typeName +> sepEq
+        +> ifElse (wasInline && List.length ecs = 1)
+           (genEnumCase { astContext with HasVerticalBar = false } (List.head ecs))
+           (indent +> sepNln
+            +> col sepNln ecs (genEnumCase { astContext with HasVerticalBar = true })
+            +> genMemberDefnList { astContext with IsInterface = false } ms
+            // Add newline after un-indent to be spacing-correct
+            +> unindent)
+        )
 
     | Simple(TDSRUnion(ao', xs)) ->
-        typeName +> sepEq 
-        +> indent +> sepNln +> opt sepNln ao' genAccess 
-        +> col sepNln xs (genUnionCase { astContext with HasVerticalBar = true })
-        +> genMemberDefnList { astContext with IsInterface = false } ms
-        +> unindent
+        ctx |>
+        (typeName +> sepEq
+        +> ifElse (wasInline && List.length xs = 1)
+           (genUnionCase { astContext with HasVerticalBar = false } (List.head xs))
+           (indent +> sepNln +> opt sepNln ao' genAccess
+            +> col sepNln xs (genUnionCase { astContext with HasVerticalBar = true })
+            +> genMemberDefnList { astContext with IsInterface = false } ms
+            +> unindent)
+        )
 
     | Simple(TDSRRecord(ao', fs)) ->
-        typeName +> sepEq 
+        (typeName +> sepEq
         +> indent +> sepNln +> opt sepSpace ao' genAccess +> sepOpenS 
         +> atCurrentColumn (col sepSemiNln fs (genField astContext "")) +> sepCloseS
         +> genMemberDefnList { astContext with IsInterface = false } ms 
-        +> unindent 
+        +> unindent) ctx
 
     | Simple TDSRNone -> 
-        typeName
+        typeName ctx
     | Simple(TDSRTypeAbbrev t) -> 
-        typeName +> sepEq +> genType astContext false t
+        (typeName +> sepEq +> genType astContext false t) ctx
     | Simple(TDSRException(ExceptionDefRepr(ats, px, ao, uc))) ->
-        genExceptionBody astContext ats px ao uc
+        (genExceptionBody astContext ats px ao uc) ctx
 
     | ObjectModel(TCSimple (TCStruct | TCInterface | TCClass) as tdk, MemberDefnList(impCtor, others)) ->
         let isInterface =
@@ -704,24 +713,24 @@ and genTypeDefn astContext (TypeDef(ats, px, ao, tds, tcs, tdr, ms, s)) =
             | TCSimple TCInterface -> true
             | _ -> false
         let astContext = { astContext with IsInterface = isInterface}
-        typeName +> opt sepNone impCtor (genMemberDefn astContext) +> sepEq 
+        (typeName +> opt sepNone impCtor (genMemberDefn astContext) +> sepEq
         +> indent +> sepNln +> genTypeDefKind tdk
         +> indent +> genMemberDefnList astContext others +> unindent
-        ++ "end" +> unindent
+        ++ "end" +> unindent) ctx
 
     | ObjectModel(TCSimple TCAugmentation, _) ->
-        typeName -- " with" +> indent
+        (typeName -- " with" +> indent
         // Remember that we use MemberDefn of parent node
-        +> genMemberDefnList { astContext with IsInterface = false } ms +> unindent
+        +> genMemberDefnList { astContext with IsInterface = false } ms +> unindent) ctx
 
     | ObjectModel(TCDelegate(FunType ts), _) ->
-        typeName +> sepEq -- "delegate of " +> genTypeList astContext ts
+        (typeName +> sepEq -- "delegate of " +> genTypeList astContext ts) ctx
     | ObjectModel(_, MemberDefnList(impCtor, others)) ->
-        typeName +> opt sepNone impCtor (genMemberDefn { astContext with IsInterface = false }) +> sepEq +> indent
-        +> genMemberDefnList { astContext with IsInterface = false } others +> unindent
+        (typeName +> opt sepNone impCtor (genMemberDefn { astContext with IsInterface = false }) +> sepEq +> indent
+        +> genMemberDefnList { astContext with IsInterface = false } others +> unindent) ctx
 
     | ExceptionRepr(ExceptionDefRepr(ats, px, ao, uc)) ->
-        genExceptionBody astContext ats px ao uc
+        (genExceptionBody astContext ats px ao uc) ctx
 
 and genSigTypeDefn astContext (SigTypeDef(ats, px, ao, tds, tcs, tdr, ms, s)) = 
     let typeName = 
