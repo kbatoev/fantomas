@@ -126,8 +126,7 @@ let main argv =
    | _ -> 0""" config
     |> prepend newline
     |> should equal """
-type TestUnion = 
-    | Test of A : int * B : int
+type TestUnion = Test of A : int * B : int
 
 [<EntryPoint>]
 let main argv = 
@@ -135,4 +134,24 @@ let main argv =
     match d with
     | Test (A = a; B = b) -> a + b
     | _ -> 0
+"""
+
+[<Test>]
+let ``should remain one-line type definition one-line`` () =
+  formatSourceString false """
+type Num = Number of int""" config
+  |> prepend newline
+  |> should equal """
+type Num = Number of int
+"""
+
+[<Test>]
+let ``should remain two-line type definition two-line`` () =
+  formatSourceString false """
+type Num =
+  | Number of int""" config
+  |> prepend newline
+  |> should equal """
+type Num = 
+    | Number of int
 """
