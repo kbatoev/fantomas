@@ -446,3 +446,9 @@ let internal NewLineInfixOps = set ["|>"; "||>"; "|||>"; ">>"; ">>="]
 /// Never break into newlines on these operators
 let internal NoBreakInfixOps = set ["="; ">"; "<";]
 
+
+let internal breakLongLineBeforeFixingCurrentColumn str f1 f2 f (ctx : Context) =
+    // if currentColumn reached 85% of pageWidth, we break line
+    if 100 * (ctx.Writer.Column + String.length str) > 85 * ctx.Config.PageWidth
+    then (indent +> sepNln +> f1 +> f +> unindent) ctx
+    else (f2 +> f) ctx
