@@ -225,3 +225,22 @@ type MyExc =
     inherit Exception
     new(msg) = { inherit Exception(msg) }
 """
+
+[<Test>]
+let ``should break long line before with when copying record`` () =
+    formatSourceString false """
+let secondRollOutcome =
+    ({ RollOutcome.Init(secondPins, None, firstFrameScoreForFirstRoll)
+        with SecondFrameScore =          secondFrameScoreForSecondRoll
+             ThirdFrameScore =           Some(thirdFrameScoreForSecondRoll)
+             ThirdFrameCumulativeScore = Some(thirdFrameCumulativeScoreForSecondRoll) })
+"""  config
+    |> prepend newline
+    |> should equal """
+let secondRollOutcome = 
+    ({ RollOutcome.Init(secondPins, None, firstFrameScoreForFirstRoll)
+           with SecondFrameScore = secondFrameScoreForSecondRoll
+                ThirdFrameScore = Some(thirdFrameScoreForSecondRoll)
+                ThirdFrameCumulativeScore = 
+                    Some(thirdFrameCumulativeScoreForSecondRoll) })
+"""
