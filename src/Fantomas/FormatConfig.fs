@@ -364,33 +364,25 @@ let internal sepPatternsInPatOr arePatternsOnTheSameLine f (ctx : Context) =
          then (sepNln +> !- "| ") ctx
          else (!- " | ") ctx
 
-/// Set a checkpoint to break at an appropriate column
-let internal autoNln f (ctx : Context) =
-    if ctx.BreakLines then 
-        let width = ctx.Config.PageWidth
-        // Create a dummy context to evaluate length of current operation
-        use colWriter = new ColumnIndentedTextWriter(new StringWriter())
-        let dummyCtx = ctx.With(colWriter)
-        let col = (f dummyCtx).Writer.Column
-        // This isn't accurate if we go to new lines
-        if col > width then 
-            f (sepNln ctx) 
-        else 
-            f ctx
-    else
-        f ctx
-
-let internal autoNlnOrSpace f (ctx : Context) =
-    if not ctx.BreakLines then f (sepSpace ctx) else
+let internal autoNlnOrAddSep f sep (ctx : Context) =
+    if not ctx.BreakLines then f (sep ctx) else
     // Create a dummy context to evaluate length of current operation
     use colWriter = new ColumnIndentedTextWriter(new StringWriter())
     let dummyCtx = ctx.With(colWriter)
-    let col = (f dummyCtx).Writer.Column
-    // don't forget to count space
-    if col + 1 > ctx.Config.PageWidth then
-        f (sepNln ctx)
+    let col = (dummyCtx |> sep |> f).Writer.Column
+    // This isn't accurate if we go to new lines
+    if col > ctx.Config.PageWidth then
+        sepNln ctx
     else
-        f (sepSpace ctx)
+        sep ctx
+
+let internal autoNln f (ctx : Context) = f (autoNlnOrAddSep f sepNone ctx)
+
+let internal autoNlnOrSpace f (ctx : Context) = f (autoNlnOrAddSep f sepSpace ctx)
+
+let internal autoNlnOrSpaceWithoutF f (ctx : Context) = autoNlnOrAddSep f sepSpace ctx
+
+let internal autoNlnAndIndent ftoCheck f (ctx : Context) = (indent +> autoNlnOrAddSep ftoCheck sepSpace +> f +> unindent) ctx
 
 /// Similar to col, skip auto newline for index 0
 let internal colAutoNlnSkip0i f' (c : seq<'T>) f (ctx : Context) = 

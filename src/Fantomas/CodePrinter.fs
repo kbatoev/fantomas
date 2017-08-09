@@ -446,7 +446,10 @@ and genExpr astContext = function
         sepOpenS 
         +> opt (if xs.IsEmpty then sepNone else sepSemi) inheritOpt 
             (fun (typ, expr) -> !- "inherit " +> genType astContext false typ +> genExpr astContext expr)
-        +> opt (!- " with ") eo (genExpr astContext) +> atCurrentColumn (col sepSemiNln xs (genRecordFieldName astContext))
+        +> atCurrentColumn(ifElse (Option.isNone eo) (atCurrentColumn (col sepSemiNln xs (genRecordFieldName astContext)))
+                            (opt sepNone eo (genExpr astContext)
+                             +> autoNlnAndIndent (!- "with " +> genRecordFieldName astContext (List.head xs))
+                                 (!- "with " +> atCurrentColumn (col sepSemiNln xs (genRecordFieldName astContext)))))
         +> sepCloseS
 
     | ObjExpr(t, eio, bd, ims) ->
