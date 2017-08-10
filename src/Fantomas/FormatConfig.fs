@@ -372,17 +372,16 @@ let internal autoNlnOrAddSep f sep (ctx : Context) =
     let col = (dummyCtx |> sep |> f).Writer.Column
     // This isn't accurate if we go to new lines
     if col > ctx.Config.PageWidth then
-        sepNln ctx
+        f (sepNln ctx)
     else
-        sep ctx
+        f (sep ctx)
 
-let internal autoNln f (ctx : Context) = f (autoNlnOrAddSep f sepNone ctx)
+let internal autoNln f (ctx : Context) = autoNlnOrAddSep f sepNone ctx
 
-let internal autoNlnOrSpace f (ctx : Context) = f (autoNlnOrAddSep f sepSpace ctx)
+let internal autoNlnOrSpace f (ctx : Context) = autoNlnOrAddSep f sepSpace ctx
 
-let internal autoNlnOrSpaceWithoutF f (ctx : Context) = autoNlnOrAddSep f sepSpace ctx
+let internal autoNlnAndIndent f (ctx : Context) = (indent +> autoNlnOrAddSep f sepSpace +> unindent) ctx
 
-let internal autoNlnAndIndent ftoCheck f (ctx : Context) = (indent +> autoNlnOrAddSep ftoCheck sepSpace +> f +> unindent) ctx
 
 /// Similar to col, skip auto newline for index 0
 let internal colAutoNlnSkip0i f' (c : seq<'T>) f (ctx : Context) = 
