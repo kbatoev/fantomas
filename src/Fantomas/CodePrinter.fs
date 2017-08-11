@@ -61,13 +61,13 @@ let rec genParsedInput astContext = function
     | ImplFile im -> genImpFile astContext im
     | SigFile si -> genSigFile astContext si
 
-and genImpFile astContext (ParsedImplFileInput(hs, mns)) = 
-    col sepNone hs genParsedHashDirective +> (if hs.IsEmpty then sepNone else sepNln)
-    +> col sepNln mns (genModuleOrNamespace astContext)
+and genImpFile astContext (ParsedImplFileInput(hs, mns)) =
+    col sepNone hs genParsedHashDirective +> (if hs.IsEmpty then sepNone else sepNln) // add new function instead sepNone and sepNln
+    +> col sepNln mns (genModuleOrNamespace astContext) // add new function instead sepNln
 
 and genSigFile astContext (ParsedSigFileInput(hs, mns)) =
-    col sepNone hs genParsedHashDirective +> (if hs.IsEmpty then sepNone else sepNln)
-    +> col sepNln mns (genSigModuleOrNamespace astContext)
+    col sepNone hs genParsedHashDirective +> (if hs.IsEmpty then sepNone else sepNln) // add new function instead sepNone and sepNln
+    +> col sepNln mns (genSigModuleOrNamespace astContext) // add new function instead sepNln
 
 and genParsedHashDirective (ParsedHashDirective(h, s)) =
     let printArgument arg =
@@ -84,7 +84,7 @@ and genModuleOrNamespace astContext (ModuleOrNamespace(ats, px, ao, s, mds, isMo
     +> genAttributes astContext ats
     +> ifElse (String.Equals(s, astContext.TopLevelModuleName, StringComparison.InvariantCultureIgnoreCase)) sepNone 
          (ifElse isModule (!- "module ") (!- "namespace ")
-            +> opt sepSpace ao genAccess +> ifElse (s = "") (!- "global") (!- s) +> rep 2 sepNln)
+            +> opt sepSpace ao genAccess +> ifElse (s = "") (!- "global") (!- s) +> rep 2 sepNln) // deal with rep 2 sepNln
     +> genModuleDeclList astContext mds
 
 and genSigModuleOrNamespace astContext (SigModuleOrNamespace(ats, px, ao, s, mds, isModule)) =
@@ -92,141 +92,150 @@ and genSigModuleOrNamespace astContext (SigModuleOrNamespace(ats, px, ao, s, mds
     +> genAttributes astContext ats
     +> ifElse (String.Equals(s, astContext.TopLevelModuleName, StringComparison.InvariantCultureIgnoreCase)) sepNone 
           (ifElse isModule (!- "module ") (!- "namespace ")
-    +> opt sepSpace ao genAccess -- s +> rep 2 sepNln)
+    +> opt sepSpace ao genAccess -- s +> rep 2 sepNln) // deal with rep 2 sepNln
     +> genSigModuleDeclList astContext mds
 
-and genModuleDeclList astContext = function
-    | [x] -> genModuleDecl astContext x
-
-    | OpenL(xs, ys) ->
-        fun ctx ->
-            let xs = sortAndDeduplicate ((|Open|_|) >> Option.get) xs ctx
+and genModuleDeclList astContext smds =
+    let gen = function
+        | [x] -> genModuleDecl astContext x
+    
+        | OpenL(xs, ys) ->
+            fun ctx ->
+                let xs = sortAndDeduplicate ((|Open|_|) >> Option.get) xs ctx
+                match ys with
+                | [] -> col sepNone xs (genModuleDecl astContext) ctx
+                | _ -> (col sepNone xs (genModuleDecl astContext) +> genModuleDeclList astContext ys) ctx
+    
+        | HashDirectiveL(xs, ys)
+        | DoExprAttributesL(xs, ys) 
+        | ModuleAbbrevL(xs, ys) 
+        | OneLinerLetL(xs, ys) ->
             match ys with
-            | [] -> col sepNln xs (genModuleDecl astContext) ctx
-            | _ -> (col sepNln xs (genModuleDecl astContext) +> rep 2 sepNln +> genModuleDeclList astContext ys) ctx
-
-    | HashDirectiveL(xs, ys)
-    | DoExprAttributesL(xs, ys) 
-    | ModuleAbbrevL(xs, ys) 
-    | OneLinerLetL(xs, ys) ->
-        match ys with
-        | [] -> col sepNln xs (genModuleDecl astContext)
-        | _ -> col sepNln xs (genModuleDecl astContext) +> rep 2 sepNln +> genModuleDeclList astContext ys
-
-    | MultilineModuleDeclL(xs, ys) ->
-        match ys with
-        | [] -> col (rep 2 sepNln) xs (genModuleDecl astContext)
-        | _ -> col (rep 2 sepNln) xs (genModuleDecl astContext) +> rep 2 sepNln +> genModuleDeclList astContext ys
-    | _ -> sepNone    
-
-and genSigModuleDeclList astContext = function
-    | [x] -> genSigModuleDecl astContext x
-
-    | SigOpenL(xs, ys) ->
-        fun ctx ->
-            let xs = sortAndDeduplicate ((|SigOpen|_|) >> Option.get) xs ctx
+            | [] -> col sepNone xs (genModuleDecl astContext)
+            | _ -> col sepNone xs (genModuleDecl astContext) +> genModuleDeclList astContext ys // deal with rep 2
+    
+        | MultilineModuleDeclL(xs, ys) ->
             match ys with
-            | [] -> col sepNln xs (genSigModuleDecl astContext) ctx
-            | _ -> (col sepNln xs (genSigModuleDecl astContext) +> rep 2 sepNln +> genSigModuleDeclList astContext ys) ctx
+            | [] -> col (sepNone) xs (genModuleDecl astContext)
+            | _ -> col (sepNone) xs (genModuleDecl astContext) +> genModuleDeclList astContext ys
+        | _ -> sepNone
+    sepNone +> gen smds // deal with sepNone
 
-    | SigHashDirectiveL(xs, ys) ->
-        match ys with
-        | [] -> col sepNone xs (genSigModuleDecl astContext)
-        | _ -> col sepNone xs (genSigModuleDecl astContext) +> sepNln +> genSigModuleDeclList astContext ys
+// I think that it is module's duty to separate from previous ones
+and genSigModuleDeclList astContext smsds =
+    let gen = function
+        | [x] -> genSigModuleDecl astContext x
+    
+        | SigOpenL(xs, ys) ->
+            fun ctx ->
+                let xs = sortAndDeduplicate ((|SigOpen|_|) >> Option.get) xs ctx
+                match ys with
+                | [] -> col sepNone xs (genSigModuleDecl astContext) ctx
+                | _ -> (col sepNone xs (genSigModuleDecl astContext) +> genSigModuleDeclList astContext ys) ctx // deal with rep 2
+    
+        | SigHashDirectiveL(xs, ys) ->
+            match ys with
+            | [] -> col sepNone xs (genSigModuleDecl astContext)
+            | _ -> col sepNone xs (genSigModuleDecl astContext) +> genSigModuleDeclList astContext ys
+    
+        | SigModuleAbbrevL(xs, ys) 
+        | SigValL(xs, ys) ->
+            match ys with
+            | [] -> col sepNln xs (genSigModuleDecl astContext)
+            | _ -> col sepNln xs (genSigModuleDecl astContext) +> genSigModuleDeclList astContext ys
+    
+        | SigMultilineModuleDeclL(xs, ys) ->
+            match ys with
+            | [] -> col sepNone xs (genSigModuleDecl astContext)
+            | _ -> col sepNone xs (genSigModuleDecl astContext) +> genSigModuleDeclList astContext ys
+    
+        | _ -> sepNone
+    sepNone +> gen smsds // deal with sepNone
 
-    | SigModuleAbbrevL(xs, ys) 
-    | SigValL(xs, ys) ->
-        match ys with
-        | [] -> col sepNln xs (genSigModuleDecl astContext)
-        | _ -> col sepNln xs (genSigModuleDecl astContext) +> rep 2 sepNln +> genSigModuleDeclList astContext ys
+and genModuleDecl astContext md =
+    let gen = function
+        | Attributes(ats) ->
+            col sepNln ats (genAttribute astContext)
+        | DoExpr(e) ->
+            genExpr astContext e
+        | Exception(ex) ->
+            genException astContext ex
+        | HashDirective(p) -> 
+            genParsedHashDirective p
+        | Extern(ats, px, ao, t, s, ps) ->
+            genPreXmlDoc px
+            +> genAttributes astContext ats
+            -- "extern " +> genType astContext false t +> sepSpace +> opt sepSpace ao genAccess
+            -- s +> sepOpenT +> col sepComma ps (genPat { astContext with IsCStylePattern = true }) +> sepCloseT
+        // Add a new line after module-level let bindings
+        | Let(b) ->
+            genLetBinding { astContext with IsFirstChild = true } "let " b
+        | LetRec(b::bs) -> 
+            genLetBinding { astContext with IsFirstChild = true } "let rec " b 
+            +> col sepNone bs (genLetBinding { astContext with IsFirstChild = false } "and ")
+    
+        | ModuleAbbrev(s1, s2) ->
+            !- "module " -- s1 +> sepEq -- s2
+        | NamespaceFragment(m) ->
+            failwithf "NamespaceFragment hasn't been implemented yet: %O" m
+        | NestedModule(ats, px, ao, s, mds) ->
+            genPreXmlDoc px
+            +> genAttributes astContext ats -- "module " +> opt sepSpace ao genAccess -- s +> sepEq
+            +> indent +> sepNln +> genModuleDeclList astContext mds +> unindent
+    
+        | Open(s) ->
+            !- (sprintf "open %s" s)
+        // There is no nested types and they are recursive if there are more than one definition
+        | Types(t::ts) ->
+            genTypeDefn { astContext with IsFirstChild = true } t 
+            +> col sepNone ts (genTypeDefn { astContext with IsFirstChild = false }) // deal with rep 2 sepNln
+        | md ->
+            failwithf "Unexpected module declaration: %O" md
+    sepConstructs md.Range +> gen md +> saveRange md.Range
 
-    | SigMultilineModuleDeclL(xs, ys) ->
-        match ys with
-        | [] -> col (rep 2 sepNln) xs (genSigModuleDecl astContext)
-        | _ -> col (rep 2 sepNln) xs (genSigModuleDecl astContext) +> rep 2 sepNln +> genSigModuleDeclList astContext ys
-
-    | _ -> sepNone
-
-and genModuleDecl astContext = function
-    | Attributes(ats) ->
-        col sepNln ats (genAttribute astContext)
-    | DoExpr(e) ->
-        genExpr astContext e
-    | Exception(ex) ->
-        genException astContext ex
-    | HashDirective(p) -> 
-        genParsedHashDirective p
-    | Extern(ats, px, ao, t, s, ps) ->
-        genPreXmlDoc px
-        +> genAttributes astContext ats
-        -- "extern " +> genType astContext false t +> sepSpace +> opt sepSpace ao genAccess
-        -- s +> sepOpenT +> col sepComma ps (genPat { astContext with IsCStylePattern = true }) +> sepCloseT
-    // Add a new line after module-level let bindings
-    | Let(b) ->
-        genLetBinding { astContext with IsFirstChild = true } "let " b
-    | LetRec(b::bs) -> 
-        genLetBinding { astContext with IsFirstChild = true } "let rec " b 
-        +> colPre (rep 2 sepNln) (rep 2 sepNln) bs (genLetBinding { astContext with IsFirstChild = false } "and ")
-
-    | ModuleAbbrev(s1, s2) ->
-        !- "module " -- s1 +> sepEq -- s2
-    | NamespaceFragment(m) ->
-        failwithf "NamespaceFragment hasn't been implemented yet: %O" m
-    | NestedModule(ats, px, ao, s, mds) -> 
-        genPreXmlDoc px
-        +> genAttributes astContext ats -- "module " +> opt sepSpace ao genAccess -- s +> sepEq
-        +> indent +> sepNln +> genModuleDeclList astContext mds +> unindent
-
-    | Open(s) ->
-        !- (sprintf "open %s" s)
-    // There is no nested types and they are recursive if there are more than one definition
-    | Types(t::ts) ->
-        genTypeDefn { astContext with IsFirstChild = true } t 
-        +> colPre (rep 2 sepNln) (rep 2 sepNln) ts (genTypeDefn { astContext with IsFirstChild = false })
-    | md ->
-        failwithf "Unexpected module declaration: %O" md
-
-and genSigModuleDecl astContext = function
-    | SigException(ex) ->
-        genSigException astContext ex
-    | SigHashDirective(p) -> 
-        genParsedHashDirective p
-    | SigVal(v) ->
-        genVal astContext v
-    | SigModuleAbbrev(s1, s2) ->
-        !- "module " -- s1 +> sepEq -- s2
-    | SigNamespaceFragment(m) ->
-        failwithf "NamespaceFragment is not supported yet: %O" m
-    | SigNestedModule(ats, px, ao, s, mds) -> 
-        genPreXmlDoc px
-        +> genAttributes astContext ats -- "module " +> opt sepSpace ao genAccess -- s +> sepEq
-        +> indent +> sepNln +> genSigModuleDeclList astContext mds +> unindent
-
-    | SigOpen(s) ->
-        !- (sprintf "open %s" s)
-    | SigTypes(t::ts) ->
-        genSigTypeDefn { astContext with IsFirstChild = true } t 
-        +> colPre (rep 2 sepNln) (rep 2 sepNln) ts (genSigTypeDefn { astContext with IsFirstChild = false })
-    | md ->
-        failwithf "Unexpected module signature declaration: %O" md
+and genSigModuleDecl astContext smsd =
+    let gen = function
+        | SigException(ex) ->
+            genSigException astContext ex
+        | SigHashDirective(p) -> 
+            genParsedHashDirective p
+        | SigVal(v) ->
+            genVal astContext v
+        | SigModuleAbbrev(s1, s2) ->
+            !- "module " -- s1 +> sepEq -- s2
+        | SigNamespaceFragment(m) ->
+            failwithf "NamespaceFragment is not supported yet: %O" m
+        | SigNestedModule(ats, px, ao, s, mds) -> 
+            genPreXmlDoc px
+            +> genAttributes astContext ats -- "module " +> opt sepSpace ao genAccess -- s +> sepEq
+            +> indent +> sepNln +> genSigModuleDeclList astContext mds +> unindent
+    
+        | SigOpen(s) ->
+            !- (sprintf "open %s" s)
+        | SigTypes(t::ts) ->
+            genSigTypeDefn { astContext with IsFirstChild = true } t 
+            +> col sepNone ts (genSigTypeDefn { astContext with IsFirstChild = false }) // deal with rep 2 sepNln
+        | md ->
+            failwithf "Unexpected module signature declaration: %O" md
+    sepConstructs smsd.Range +> gen smsd +> saveRange smsd.Range
 
 and genAccess (Access s) = !- s
 
-and genAttribute astContext (Attribute(s, e, target)) = 
+and genAttribute astContext (Attribute(s, e, target, r)) = 
     match e with
     // Special treatment for function application on attributes
     | ConstExpr(Const "()", _) -> 
-        !- "[<" +> opt sepColonFixed target (!-) -- s -- ">]"
+        !- "[<" +> opt sepColonFixed target (!-) -- s -- ">]" +> saveRange r
     | e -> 
-        !- "[<"  +> opt sepColonFixed target (!-) -- s +> genExpr astContext e -- ">]"
+        !- "[<"  +> opt sepColonFixed target (!-) -- s +> genExpr astContext e -- ">]" +> saveRange r
     
 and genAttributesCore astContext ats = 
-    let genAttributeExpr astContext (Attribute(s, e, target)) = 
+    let genAttributeExpr astContext (Attribute(s, e, target, r)) = 
         match e with
         | ConstExpr(Const "()", _) -> 
-            opt sepColonFixed target (!-) -- s
+            opt sepColonFixed target (!-) -- s +> saveRange r
         | e -> 
-            opt sepColonFixed target (!-) -- s +> genExpr astContext e
+            opt sepColonFixed target (!-) -- s +> genExpr astContext e +> saveRange r
     ifElse (Seq.isEmpty ats) sepNone (!- "[<" +> col sepSemi ats (genAttributeExpr astContext) -- ">]")
 
 and genOnelinerAttributes astContext ats =
@@ -261,37 +270,42 @@ and noIndentBreakNln astContext e ctx =
 
 and genTyparList astContext tps = 
     ifElse (List.atMostOne tps) (col wordOr tps (genTypar astContext)) (sepOpenT +> col wordOr tps (genTypar astContext) +> sepCloseT)
+    // saveRange would be called from genTypar
 
 and genTypeParam astContext tds tcs =
     ifElse (List.isEmpty tds) sepNone
         (!- "<" +> coli sepComma tds (fun i decl -> genTyparDecl { astContext with IsFirstTypeParam = i = 0 } decl) 
          +> colPre (!- " when ") wordAnd tcs (genTypeConstraint astContext) -- ">")
+         // saveRange would be called from genTyparDecl and genTypeConstraint
 
-and genLetBinding astContext pref b = 
-    match b with 
-    | LetBinding(ats, px, ao, isInline, isMutable, p, e) ->
-        let prefix =
+and genLetBinding astContext pref b =
+    let gen b =
+        match b with
+        | LetBinding(ats, px, ao, isInline, isMutable, p, e) ->
+            let prefix =
+                genPreXmlDoc px
+                +> ifElse astContext.IsFirstChild (genAttributes astContext ats -- pref)
+                    (!- pref +> genOnelinerAttributes astContext ats)
+                +> opt sepSpace ao genAccess
+                +> ifElse isMutable (!- "mutable ") sepNone +> ifElse isInline (!- "inline ") sepNone
+                +> genPat astContext p
+
+            match e with
+            | TypedExpr(Typed, e, t) -> prefix +> sepColon +> genType astContext false t +> sepEq +> preserveBreakNln astContext e
+            | e -> prefix +> sepEq +> preserveBreakNln astContext e
+
+        | DoBinding(ats, px, e) ->
+            let prefix = if pref.Contains("let") then pref.Replace("let", "do") else "do "
             genPreXmlDoc px
-            +> ifElse astContext.IsFirstChild (genAttributes astContext ats -- pref) 
-                (!- pref +> genOnelinerAttributes astContext ats)
-            +> opt sepSpace ao genAccess
-            +> ifElse isMutable (!- "mutable ") sepNone +> ifElse isInline (!- "inline ") sepNone
-            +> genPat astContext p
+            +> genAttributes astContext ats -- prefix +> preserveBreakNln astContext e
 
-        match e with
-        | TypedExpr(Typed, e, t) -> prefix +> sepColon +> genType astContext false t +> sepEq +> preserveBreakNln astContext e
-        | e -> prefix +> sepEq +> preserveBreakNln astContext e
-
-    | DoBinding(ats, px, e) ->
-        let prefix = if pref.Contains("let") then pref.Replace("let", "do") else "do "
-        genPreXmlDoc px
-        +> genAttributes astContext ats -- prefix +> preserveBreakNln astContext e
-
-    | b ->
-        failwithf "%O isn't a let binding" b
+        | b ->
+            failwithf "%O isn't a let binding" b
+    gen b +> saveRange b.RangeOfBindingAndRhs
 
 and genShortGetProperty astContext e = 
     sepEq +> preserveBreakNln astContext e
+    // range would be saved in preserveBreakNln
 
 and genProperty astContext prefix ao propertyKind ps e =
     let tuplerize ps =
@@ -308,28 +322,32 @@ and genProperty astContext prefix ao propertyKind ps e =
         +> ifElse (List.atMostOne ps) (col sepComma ps (genPat astContext) +> sepSpace) 
             (sepOpenT +> col sepComma ps (genPat astContext) +> sepCloseT +> sepSpace)
         +> genPat astContext p +> sepEq +> preserveBreakNln astContext e
+        // range would be saved in preserveBreakNln
 
     | ps -> 
         !- prefix +> opt sepSpace ao genAccess -- propertyKind +> col sepSpace ps (genPat astContext) 
         +> sepEq +> preserveBreakNln astContext e
+        // range would be saved in preserveBreakNln
 
 and genPropertyWithGetSet astContext (b1, b2) =
-    match b1, b2 with
-    | PropertyBinding(ats, px, ao, isInline, mf1, PatLongIdent(ao1, s1, ps1, _), e1), 
-      PropertyBinding(_, _, _, _, _, PatLongIdent(ao2, _, ps2, _), e2) ->
-        let prefix =
-            genPreXmlDoc px
-            +> genAttributes astContext ats +> genMemberFlags astContext mf1
-            +> ifElse isInline (!- "inline ") sepNone +> opt sepSpace ao genAccess
-        assert(ps1 |> Seq.map fst |> Seq.forall Option.isNone)
-        assert(ps2 |> Seq.map fst |> Seq.forall Option.isNone)
-        let ps1 = List.map snd ps1
-        let ps2 = List.map snd ps2
-        prefix -- s1 +> sepSpace +> indent +> sepNln
-        +> genProperty astContext "with " ao1 "get " ps1 e1 +> sepNln 
-        +> genProperty astContext "and " ao2 "set " ps2 e2
-        +> unindent
-    | _ -> sepNone
+    let gen =
+        match b1, b2 with
+        | PropertyBinding(ats, px, ao, isInline, mf1, PatLongIdent(ao1, s1, ps1, _), e1),
+          PropertyBinding(_, _, _, _, _, PatLongIdent(ao2, _, ps2, _), e2) ->
+            let prefix =
+                genPreXmlDoc px
+                +> genAttributes astContext ats +> genMemberFlags astContext mf1
+                +> ifElse isInline (!- "inline ") sepNone +> opt sepSpace ao genAccess
+            assert(ps1 |> Seq.map fst |> Seq.forall Option.isNone)
+            assert(ps2 |> Seq.map fst |> Seq.forall Option.isNone)
+            let ps1 = List.map snd ps1
+            let ps2 = List.map snd ps2
+            prefix -- s1 +> sepSpace +> indent +> sepNln
+            +> genProperty astContext "with " ao1 "get " ps1 e1 +> sepNln
+            +> genProperty astContext "and " ao2 "set " ps2 e2
+            +> unindent
+        | _ -> sepNone // maybe call saveRange
+    gen
 
 /// Each member is separated by a new line.
 and genMemberBindingList astContext = function
@@ -349,60 +367,63 @@ and genMemberBindingList astContext = function
         | _ -> col sepNln xs (genMemberBinding astContext) +> sepNln +> genMemberBindingList astContext ys
     | _ -> sepNone
 
-and genMemberBinding astContext b = 
-    match b with 
-    | PropertyBinding(ats, px, ao, isInline, mf, p, e) -> 
-        let prefix =
-            genPreXmlDoc px
-            +> genAttributes astContext ats +> genMemberFlags astContext mf
-            +> ifElse isInline (!- "inline ") sepNone +> opt sepSpace ao genAccess
+and genMemberBinding astContext b =
+    let gen =
+        match b with
+        | PropertyBinding(ats, px, ao, isInline, mf, p, e) ->
+            let prefix =
+                genPreXmlDoc px
+                +> genAttributes astContext ats +> genMemberFlags astContext mf
+                +> ifElse isInline (!- "inline ") sepNone +> opt sepSpace ao genAccess
 
-        let propertyKind =
-            match mf with
-            | MFProperty PropertyGet -> "get "
-            | MFProperty PropertySet -> "set "
-            | mf -> failwithf "Unexpected member flags: %O" mf
+            let propertyKind =
+                match mf with
+                | MFProperty PropertyGet -> "get "
+                | MFProperty PropertySet -> "set "
+                | mf -> failwithf "Unexpected member flags: %O" mf
 
-        match p with
-        | PatLongIdent(ao, s, ps, _) ->   
-            assert (ps |> Seq.map fst |> Seq.forall Option.isNone)
-            match ao, propertyKind, ps with
-            | None, "get ", [_, PatParen(PatConst(Const "()", _))] ->
-                // Provide short-hand notation `x.Member = ...` for `x.Member with get()` getters
-                prefix -- s +> genShortGetProperty astContext e
-            | _ ->
-                let ps = List.map snd ps              
-                prefix -- s +> sepSpace +> indent +> sepNln +> 
-                genProperty astContext "with " ao propertyKind ps e
-                +> unindent
-        | p -> failwithf "Unexpected pattern: %O" p
+            match p with
+            | PatLongIdent(ao, s, ps, _) ->
+                assert (ps |> Seq.map fst |> Seq.forall Option.isNone)
+                match ao, propertyKind, ps with
+                | None, "get ", [_, PatParen(PatConst(Const "()", _))] ->
+                    // Provide short-hand notation `x.Member = ...` for `x.Member with get()` getters
+                    prefix -- s +> genShortGetProperty astContext e
+                | _ ->
+                    let ps = List.map snd ps
+                    prefix -- s +> sepSpace +> indent +> sepNln
+                    +> genProperty astContext "with " ao propertyKind ps e
+                    +> unindent
+            | p -> failwithf "Unexpected pattern: %O" p
 
-    | MemberBinding(ats, px, ao, isInline, mf, p, e) ->
-        let prefix =
-            genPreXmlDoc px
-            +> genAttributes astContext ats +> genMemberFlags astContext mf
-            +> ifElse isInline (!- "inline ") sepNone +> opt sepSpace ao genAccess +> genPat astContext p
+        | MemberBinding(ats, px, ao, isInline, mf, p, e) ->
+            let prefix =
+                genPreXmlDoc px
+                +> genAttributes astContext ats +> genMemberFlags astContext mf
+                +> ifElse isInline (!- "inline ") sepNone +> opt sepSpace ao genAccess +> genPat astContext p
 
-        match e with
-        | TypedExpr(Typed, e, t) -> prefix +> sepColon +> genType astContext false t +> sepEq +> preserveBreakNln astContext e
-        | e -> prefix +> sepEq +> preserveBreakNln astContext e
+            match e with
+            | TypedExpr(Typed, e, t) -> prefix +> sepColon +> genType astContext false t +> sepEq +> preserveBreakNln astContext e
+            | e -> prefix +> sepEq +> preserveBreakNln astContext e
 
-    | ExplicitCtor(ats, px, ao, p, e, so) ->
-        let prefix =
-            genPreXmlDoc px
-            +> genAttributes astContext ats
-            +> opt sepSpace ao genAccess +> genPat astContext p 
-            +> opt sepNone so (sprintf " as %s" >> (!-))
+        | ExplicitCtor(ats, px, ao, p, e, so) ->
+            let prefix =
+                genPreXmlDoc px
+                +> genAttributes astContext ats
+                +> opt sepSpace ao genAccess +> genPat astContext p
+                +> opt sepNone so (sprintf " as %s" >> (!-))
 
-        match e with
-        // Handle special "then" block i.e. fake sequential expressions in constructors
-        | Sequential(e1, e2, false) -> 
-            prefix +> sepEq +> indent +> sepNln 
-            +> genExpr astContext e1 ++ "then " +> preserveBreakNln astContext e2 +> unindent
+            match e with
+            // Handle special "then" block i.e. fake sequential expressions in constructors
+            | Sequential(e1, e2, false) ->
+                prefix +> sepEq +> indent +> sepNln
+                +> genExpr astContext e1 ++ "then " +> preserveBreakNln astContext e2 +> unindent
 
-        | e -> prefix +> sepEq +> preserveBreakNln astContext e
+            | e -> prefix +> sepEq +> preserveBreakNln astContext e
 
-    | b -> failwithf "%O isn't a member binding" b
+        | b -> failwithf "%O isn't a member binding" b
+    sepConstructs b.RangeOfBindingAndRhs +> gen +> saveRange b.RangeOfBindingAndRhs
+    // maybe it is excessive to call and it would be enough to call inner functions: genPat, preserveBreakNln, etc.
 
 and genMemberFlags astContext = function
     | MFMember _ -> !- "member "
@@ -410,207 +431,211 @@ and genMemberFlags astContext = function
     | MFConstructor _ -> sepNone
     | MFOverride _ -> ifElse astContext.IsInterface (!- "member ") (!- "override ")
 
-and genVal astContext (Val(ats, px, ao, s, t, vi, _)) = 
+and genVal astContext (Val(ats, px, ao, s, t, vi, _, r)) = 
     let (FunType namedArgs) = (t, vi)
     genPreXmlDoc px
     +> genAttributes astContext ats 
     +> atCurrentColumn (indent -- "val " +> opt sepSpace ao genAccess -- s 
                         +> sepColon +> genTypeList astContext namedArgs +> unindent)
+    +> saveRange r
 
 and genRecordFieldName astContext (RecordFieldName(s, eo)) =
     opt sepNone eo (fun e -> !- s +> sepEq +> preserveBreakNln astContext e)
+    // preserveBreakNln will save new range
 
-and genExpr astContext = function
-    | SingleExpr(kind, e) -> str kind +> genExpr astContext e
-    | ConstExpr(c) -> genConst c
-    | NullExpr -> !- "null"
-    // Not sure about the role of e1
-    | Quote(_, e2, isRaw) ->         
-        let e = genExpr astContext e2
-        ifElse isRaw (!- "<@@ " +> e -- " @@>") (!- "<@ " +> e -- " @>")
-    | TypedExpr(TypeTest, e, t) -> genExpr astContext e -- " :? " +> genType astContext false t
-    | TypedExpr(New, e, t) -> 
-        !- "new " +> genType astContext false t +> ifElse (hasParenthesis e) sepNone sepSpace +> genExpr astContext e
-    | TypedExpr(Downcast, e, t) -> genExpr astContext e -- " :?> " +> genType astContext false t
-    | TypedExpr(Upcast, e, t) -> genExpr astContext e -- " :> " +> genType astContext false t
-    | TypedExpr(Typed, e, t) -> genExpr astContext e +> sepColon +> genType astContext false t
-    | Tuple es -> atCurrentColumn (coli sepComma es (fun i -> if i = 0 then genExpr astContext else noIndentBreakNln astContext))
-    | ArrayOrList(isArray, [], _) -> 
-        ifElse isArray (sepOpenAFixed +> sepCloseAFixed) (sepOpenLFixed +> sepCloseLFixed)
-    | ArrayOrList(isArray, xs, isSimple) -> 
-        let sep = ifElse isSimple sepSemi sepSemiNln
-        ifElse isArray (sepOpenA +> atCurrentColumn (colAutoNlnSkip0 sep xs (genExpr astContext)) +> sepCloseA) 
-            (sepOpenL +> atCurrentColumn (colAutoNlnSkip0 sep xs (genExpr astContext)) +> sepCloseL)
+and genExpr astContext expr =
+    let gen = function
+        | SingleExpr(kind, e) -> str kind +> genExpr astContext e
+        | ConstExpr(c) -> genConst c
+        | NullExpr -> !- "null"
+        // Not sure about the role of e1
+        | Quote(_, e2, isRaw) ->
+            let e = genExpr astContext e2
+            ifElse isRaw (!- "<@@ " +> e -- " @@>") (!- "<@ " +> e -- " @>")
+        | TypedExpr(TypeTest, e, t) -> genExpr astContext e -- " :? " +> genType astContext false t
+        | TypedExpr(New, e, t) ->
+            !- "new " +> genType astContext false t +> ifElse (hasParenthesis e) sepNone sepSpace +> genExpr astContext e
+        | TypedExpr(Downcast, e, t) -> genExpr astContext e -- " :?> " +> genType astContext false t
+        | TypedExpr(Upcast, e, t) -> genExpr astContext e -- " :> " +> genType astContext false t
+        | TypedExpr(Typed, e, t) -> genExpr astContext e +> sepColon +> genType astContext false t
+        | Tuple es -> atCurrentColumn (coli sepComma es (fun i -> if i = 0 then genExpr astContext else noIndentBreakNln astContext))
+        | ArrayOrList(isArray, [], _) ->
+            ifElse isArray (sepOpenAFixed +> sepCloseAFixed) (sepOpenLFixed +> sepCloseLFixed)
+        | ArrayOrList(isArray, xs, isSimple) ->
+            let sep = ifElse isSimple sepSemi sepSemiNln
+            ifElse isArray (sepOpenA +> atCurrentColumn (colAutoNlnSkip0 sep xs (genExpr astContext)) +> sepCloseA)
+                (sepOpenL +> atCurrentColumn (colAutoNlnSkip0 sep xs (genExpr astContext)) +> sepCloseL)
 
-    | Record(inheritOpt, xs, eo) -> 
-        sepOpenS 
-        +> opt (if xs.IsEmpty then sepNone else sepSemi) inheritOpt 
-            (fun (typ, expr) -> !- "inherit " +> genType astContext false typ +> genExpr astContext expr)
-        +> opt (!- " with ") eo (genExpr astContext) +> atCurrentColumn (col sepSemiNln xs (genRecordFieldName astContext))
-        +> sepCloseS
+        | Record(inheritOpt, xs, eo) ->
+            sepOpenS
+            +> opt (if xs.IsEmpty then sepNone else sepSemi) inheritOpt
+                (fun (typ, expr) -> !- "inherit " +> genType astContext false typ +> genExpr astContext expr)
+            +> opt (!- " with ") eo (genExpr astContext) +> atCurrentColumn (col sepSemiNln xs (genRecordFieldName astContext))
+            +> sepCloseS
 
-    | ObjExpr(t, eio, bd, ims) ->
-        // Check the role of the second part of eio
-        let param = opt sepNone (Option.map fst eio) (genExpr astContext)
-        sepOpenS +> 
-        atCurrentColumn (!- "new " +> genType astContext false t +> param -- " with" 
-            +> indent +> sepNln +> genMemberBindingList { astContext with IsInterface = true } bd +> unindent
-            +> colPre sepNln sepNln ims (genInterfaceImpl astContext)) +> sepCloseS
+        | ObjExpr(t, eio, bd, ims) ->
+            // Check the role of the second part of eio
+            let param = opt sepNone (Option.map fst eio) (genExpr astContext)
+            sepOpenS +>
+            atCurrentColumn (!- "new " +> genType astContext false t +> param -- " with"
+                +> indent +> sepNln +> genMemberBindingList { astContext with IsInterface = true } bd +> unindent
+                +> colPre sepNln sepNln ims (genInterfaceImpl astContext)) +> sepCloseS
 
-    | While(e1, e2) -> 
-        atCurrentColumn (!- "while " +> genExpr astContext e1 -- " do" 
-        +> indent +> sepNln +> genExpr astContext e2 +> unindent)
+        | While(e1, e2) ->
+            atCurrentColumn (!- "while " +> genExpr astContext e1 -- " do"
+            +> indent +> sepNln +> genExpr astContext e2 +> unindent)
 
-    | For(s, e1, e2, e3, isUp) ->
-        atCurrentColumn (!- (sprintf "for %s = " s) +> genExpr astContext e1 
-            +> ifElse isUp (!- " to ") (!- " downto ") +> genExpr astContext e2 -- " do" 
-            +> indent +> sepNln +> genExpr astContext e3 +> unindent)
+        | For(s, e1, e2, e3, isUp) ->
+            atCurrentColumn (!- (sprintf "for %s = " s) +> genExpr astContext e1
+                +> ifElse isUp (!- " to ") (!- " downto ") +> genExpr astContext e2 -- " do"
+                +> indent +> sepNln +> genExpr astContext e3 +> unindent)
 
-    // Handle the form 'for i in e1 -> e2'
-    | ForEach(p, e1, e2, isArrow) ->
-        atCurrentColumn (!- "for " +> genPat astContext p -- " in " +> genExpr { astContext with IsNakedRange = true } e1 
-            +> ifElse isArrow (sepArrow +> preserveBreakNln astContext e2) (!- " do" +> indent +> sepNln +> genExpr astContext e2 +> unindent))
+        // Handle the form 'for i in e1 -> e2'
+        | ForEach(p, e1, e2, isArrow) ->
+            atCurrentColumn (!- "for " +> genPat astContext p -- " in " +> genExpr { astContext with IsNakedRange = true } e1
+                +> ifElse isArrow (sepArrow +> preserveBreakNln astContext e2) (!- " do" +> indent +> sepNln +> genExpr astContext e2 +> unindent))
 
-    | CompExpr(isArrayOrList, e) ->
-        let astContext = { astContext with IsNakedRange = true }
-        ifElse isArrayOrList (genExpr astContext e) 
-            (sepOpenS +> noIndentBreakNln astContext e 
-             +> ifElse (checkBreakForExpr e) (unindent +> sepNln +> sepCloseSFixed) sepCloseS) 
+        | CompExpr(isArrayOrList, e) ->
+            let astContext = { astContext with IsNakedRange = true }
+            ifElse isArrayOrList (genExpr astContext e)
+                (sepOpenS +> noIndentBreakNln astContext e
+                 +> ifElse (checkBreakForExpr e) (unindent +> sepNln +> sepCloseSFixed) sepCloseS)
 
-    | ArrayOrListOfSeqExpr(isArray, e) -> 
-        let astContext = { astContext with IsNakedRange = true }
-        ifElse isArray (sepOpenA +> genExpr astContext e +> sepCloseA) (sepOpenL +> genExpr astContext e +> sepCloseL)
-    | JoinIn(e1, e2) -> genExpr astContext e1 -- " in " +> genExpr astContext e2
-    | Paren(DesugaredLambda(cps, e)) ->
-        sepOpenT -- "fun " +>  col sepSpace cps (genComplexPats astContext) +> sepArrow +> noIndentBreakNln astContext e +> sepCloseT
-    | DesugaredLambda(cps, e) -> 
-        !- "fun " +>  col sepSpace cps (genComplexPats astContext) +> sepArrow +> preserveBreakNln astContext e 
-    | Paren(Lambda(e, sps)) ->
-        sepOpenT -- "fun " +> col sepSpace sps (genSimplePats astContext) +> sepArrow +> noIndentBreakNln astContext e +> sepCloseT
-    // When there are parentheses, most likely lambda will appear in function application
-    | Lambda(e, sps) -> 
-        !- "fun " +> col sepSpace sps (genSimplePats astContext) +> sepArrow +> preserveBreakNln astContext e
-    | MatchLambda(sp, _) -> !- "function " +> colPre sepNln sepNln sp (genClause astContext true)
-    | Match(e, cs) -> 
-        atCurrentColumn (!- "match " +> genExpr astContext e -- " with" +> colPre sepNln sepNln cs (genClause astContext true))
-    | TraitCall(tps, msg, e) -> 
-        genTyparList astContext tps +> sepColon +> sepOpenT +> genMemberSig astContext msg +> sepCloseT 
-        +> sepSpace +> genExpr astContext e
+        | ArrayOrListOfSeqExpr(isArray, e) ->
+            let astContext = { astContext with IsNakedRange = true }
+            ifElse isArray (sepOpenA +> genExpr astContext e +> sepCloseA) (sepOpenL +> genExpr astContext e +> sepCloseL)
+        | JoinIn(e1, e2) -> genExpr astContext e1 -- " in " +> genExpr astContext e2
+        | Paren(DesugaredLambda(cps, e)) ->
+            sepOpenT -- "fun " +>  col sepSpace cps (genComplexPats astContext) +> sepArrow +> noIndentBreakNln astContext e +> sepCloseT
+        | DesugaredLambda(cps, e) ->
+            !- "fun " +>  col sepSpace cps (genComplexPats astContext) +> sepArrow +> preserveBreakNln astContext e
+        | Paren(Lambda(e, sps)) ->
+            sepOpenT -- "fun " +> col sepSpace sps (genSimplePats astContext) +> sepArrow +> noIndentBreakNln astContext e +> sepCloseT
+        // When there are parentheses, most likely lambda will appear in function application
+        | Lambda(e, sps) ->
+            !- "fun " +> col sepSpace sps (genSimplePats astContext) +> sepArrow +> preserveBreakNln astContext e
+        | MatchLambda(sp, _) -> !- "function " +> colPre sepNln sepNln sp (genClause astContext true)
+        | Match(e, cs) ->
+            atCurrentColumn (!- "match " +> genExpr astContext e -- " with" +> colPre sepNln sepNln cs (genClause astContext true))
+        | TraitCall(tps, msg, e) ->
+            genTyparList astContext tps +> sepColon +> sepOpenT +> genMemberSig astContext msg +> sepCloseT
+            +> sepSpace +> genExpr astContext e
 
-    | Paren e -> 
-        // Parentheses nullify effects of no space inside DotGet
-        sepOpenT +> genExpr { astContext with IsInsideDotGet = false } e +> sepCloseT
-    | CompApp(s, e) ->
-        !- s +> sepSpace +> sepOpenS +> genExpr { astContext with IsNakedRange = true } e 
-        +> ifElse (checkBreakForExpr e) (sepNln +> sepCloseSFixed) sepCloseS
-    // This supposes to be an infix function, but for some reason it isn't picked up by InfixApps
-    | App(Var "?", e::es) -> genExpr astContext e -- "?" +> col sepSpace es (genExpr astContext)
-    | App(Var "..", [e1; e2]) ->
-        let expr = genExpr astContext e1 -- ".." +> genExpr astContext e2
-        ifElse astContext.IsNakedRange expr (sepOpenS +> expr +> sepCloseS)
-    | App(Var ".. ..", [e1; e2; e3]) -> 
-        let expr = genExpr astContext e1 -- ".." +> genExpr astContext e2 -- ".." +> genExpr astContext e3
-        ifElse astContext.IsNakedRange expr (sepOpenS +> expr +> sepCloseS)
-    // Separate two prefix ops by spaces
-    | PrefixApp(s1, PrefixApp(s2, e)) -> !- (sprintf "%s %s" s1 s2) +> genExpr astContext e
-    | PrefixApp(s, e) -> !- s +> genExpr astContext e
-    // Handle spaces of infix application based on which category it belongs to
-    | InfixApps(e, es) -> 
-        // Only put |> on the same line in a very trivial expression
-        atCurrentColumn (genExpr astContext e +> genInfixApps astContext (checkNewLine e es) es)
+        | Paren e ->
+            // Parentheses nullify effects of no space inside DotGet
+            sepOpenT +> genExpr { astContext with IsInsideDotGet = false } e +> sepCloseT
+        | CompApp(s, e) ->
+            !- s +> sepSpace +> sepOpenS +> genExpr { astContext with IsNakedRange = true } e
+            +> ifElse (checkBreakForExpr e) (sepNln +> sepCloseSFixed) sepCloseS
+        // This supposes to be an infix function, but for some reason it isn't picked up by InfixApps
+        | App(Var "?", e::es) -> genExpr astContext e -- "?" +> col sepSpace es (genExpr astContext)
+        | App(Var "..", [e1; e2]) ->
+            let expr = genExpr astContext e1 -- ".." +> genExpr astContext e2
+            ifElse astContext.IsNakedRange expr (sepOpenS +> expr +> sepCloseS)
+        | App(Var ".. ..", [e1; e2; e3]) ->
+            let expr = genExpr astContext e1 -- ".." +> genExpr astContext e2 -- ".." +> genExpr astContext e3
+            ifElse astContext.IsNakedRange expr (sepOpenS +> expr +> sepCloseS)
+        // Separate two prefix ops by spaces
+        | PrefixApp(s1, PrefixApp(s2, e)) -> !- (sprintf "%s %s" s1 s2) +> genExpr astContext e
+        | PrefixApp(s, e) -> !- s +> genExpr astContext e
+        // Handle spaces of infix application based on which category it belongs to
+        | InfixApps(e, es) ->
+            // Only put |> on the same line in a very trivial expression
+            atCurrentColumn (genExpr astContext e +> genInfixApps astContext (checkNewLine e es) es)
 
-    | TernaryApp(e1,e2,e3) -> 
-        atCurrentColumn (genExpr astContext e1 +> !- "?" +> genExpr astContext e2 +> sepSpace +> !- "<-" +> sepSpace +> genExpr astContext e3)
+        | TernaryApp(e1,e2,e3) ->
+            atCurrentColumn (genExpr astContext e1 +> !- "?" +> genExpr astContext e2 +> sepSpace +> !- "<-" +> sepSpace +> genExpr astContext e3)
 
-    // This filters a few long examples of App
-    | DotGetAppSpecial(s, es) ->
-        !- s 
-        +> atCurrentColumn 
-             (colAutoNlnSkip0 sepNone es (fun (s, e) ->
-                (!- (sprintf ".%s" s) 
-                    +> ifElse (hasParenthesis e) sepNone sepSpace +> genExpr astContext e)))
+        // This filters a few long examples of App
+        | DotGetAppSpecial(s, es) ->
+            !- s
+            +> atCurrentColumn
+                 (colAutoNlnSkip0 sepNone es (fun (s, e) ->
+                    (!- (sprintf ".%s" s)
+                        +> ifElse (hasParenthesis e) sepNone sepSpace +> genExpr astContext e)))
 
-    | DotGetApp(e, es) -> 
-        let expr = 
-            match e with
-            | App(e1, [e2]) -> 
-                noNln (genExpr astContext e1 +> ifElse (hasParenthesis e2) sepNone sepSpace +> genExpr astContext e2)
-            | _ -> 
-                noNln (genExpr astContext e)
-        expr
-        +> indent 
-        +> (col sepNone es (fun (s, e) -> 
-                autoNln (!- (sprintf ".%s" s) 
-                    +> ifElse (hasParenthesis e) sepNone sepSpace +> genExpr astContext e)))
-        +> unindent
+        | DotGetApp(e, es) ->
+            let expr =
+                match e with
+                | App(e1, [e2]) ->
+                    noNln (genExpr astContext e1 +> ifElse (hasParenthesis e2) sepNone sepSpace +> genExpr astContext e2)
+                | _ ->
+                    noNln (genExpr astContext e)
+            expr
+            +> indent
+            +> (col sepNone es (fun (s, e) ->
+                    autoNln (!- (sprintf ".%s" s)
+                        +> ifElse (hasParenthesis e) sepNone sepSpace +> genExpr astContext e)))
+            +> unindent
 
-    // Unlike infix app, function application needs a level of indentation
-    | App(e1, [e2]) -> 
-        atCurrentColumn (genExpr astContext e1 +> 
-            ifElse (not astContext.IsInsideDotGet)
-                (ifElse (hasParenthesis e2) 
-                    (ifElse (addSpaceBeforeParensInFunCall e1 e2) sepBeforeArg sepNone) 
-                    sepSpace)
-                sepNone
-            +> indent +> autoNln (genExpr astContext e2) +> unindent)
+        // Unlike infix app, function application needs a level of indentation
+        | App(e1, [e2]) ->
+            atCurrentColumn (genExpr astContext e1 +>
+                ifElse (not astContext.IsInsideDotGet)
+                    (ifElse (hasParenthesis e2)
+                        (ifElse (addSpaceBeforeParensInFunCall e1 e2) sepBeforeArg sepNone)
+                        sepSpace)
+                    sepNone
+                +> indent +> autoNln (genExpr astContext e2) +> unindent)
 
-    // Always spacing in multiple arguments
-    | App(e, es) -> 
-        atCurrentColumn (genExpr astContext e +> 
-            colPre sepSpace sepSpace es (fun e -> indent +> autoNln (genExpr astContext e) +> unindent))
+        // Always spacing in multiple arguments
+        | App(e, es) ->
+            atCurrentColumn (genExpr astContext e +>
+                colPre sepSpace sepSpace es (fun e -> indent +> autoNln (genExpr astContext e) +> unindent))
 
-    | TypeApp(e, ts) -> genExpr astContext e -- "<" +> col sepComma ts (genType astContext false) -- ">"
-    | LetOrUses(bs, e) ->
-        atCurrentColumn (genLetOrUseList astContext bs +> sepNln +> genExpr astContext e)
+        | TypeApp(e, ts) -> genExpr astContext e -- "<" +> col sepComma ts (genType astContext false) -- ">"
+        | LetOrUses(bs, e) ->
+            atCurrentColumn (genLetOrUseList astContext bs +> sepNln +> genExpr astContext e)
 
-    // Could customize a bit if e is single line
-    | TryWith(e, cs) -> 
-        let prefix = !- "try " +> indent +> sepNln +> genExpr astContext e +> unindent ++ "with"
-        match cs with
-        | [c] -> 
-            atCurrentColumn (prefix +> sepSpace +> genClause astContext false c)
-        | _ -> 
-            atCurrentColumn (prefix +> indentOnWith +> sepNln +> col sepNln cs (genClause astContext true) +> unindentOnWith)
+        // Could customize a bit if e is single line
+        | TryWith(e, cs) ->
+            let prefix = !- "try " +> indent +> sepNln +> genExpr astContext e +> unindent ++ "with"
+            match cs with
+            | [c] ->
+                atCurrentColumn (prefix +> sepSpace +> genClause astContext false c)
+            | _ ->
+                atCurrentColumn (prefix +> indentOnWith +> sepNln +> col sepNln cs (genClause astContext true) +> unindentOnWith)
 
-    | TryFinally(e1, e2) -> 
-        atCurrentColumn (!- "try " +> indent +> sepNln +> genExpr astContext e1 +> unindent ++ "finally" 
-            +> indent +> sepNln +> genExpr astContext e2 +> unindent)    
+        | TryFinally(e1, e2) ->
+            atCurrentColumn (!- "try " +> indent +> sepNln +> genExpr astContext e1 +> unindent ++ "finally"
+                +> indent +> sepNln +> genExpr astContext e2 +> unindent)
 
-    | SequentialSimple es -> atCurrentColumn (colAutoNlnSkip0 sepSemi es (genExpr astContext))
-    // It seems too annoying to use sepSemiNln
-    | Sequentials es -> atCurrentColumn (col sepNln es (genExpr astContext))
-    // A generalization of IfThenElse
-    | ElIf((e1,e2, _)::es, en) ->
-        atCurrentColumn (!- "if " +> ifElse (checkBreakForExpr e1) (genExpr astContext e1 ++ "then") (genExpr astContext e1 +- "then") -- " " 
-            +> preserveBreakNln astContext e2
-            +> fun ctx -> col sepNone es (fun (e1, e2, r) ->
-                             ifElse (startWith "elif" r ctx) (!+ "elif ") (!+ "else if ")
-                             +> ifElse (checkBreakForExpr e1) (genExpr astContext e1 ++ "then") (genExpr astContext e1 +- "then") 
-                             -- " " +> preserveBreakNln astContext e2) ctx
-            ++ "else " +> preserveBreakNln astContext en)
+        | SequentialSimple es -> atCurrentColumn (colAutoNlnSkip0 sepSemi es (genExpr astContext))
+        // It seems too annoying to use sepSemiNln
+        | Sequentials es -> atCurrentColumn (col sepNln es (genExpr astContext))
+        // A generalization of IfThenElse
+        | ElIf((e1,e2, _)::es, en) ->
+            atCurrentColumn (!- "if " +> ifElse (checkBreakForExpr e1) (genExpr astContext e1 ++ "then") (genExpr astContext e1 +- "then") -- " "
+                +> preserveBreakNln astContext e2
+                +> fun ctx -> col sepNone es (fun (e1, e2, r) ->
+                                 ifElse (startWith "elif" r ctx) (!+ "elif ") (!+ "else if ")
+                                 +> ifElse (checkBreakForExpr e1) (genExpr astContext e1 ++ "then") (genExpr astContext e1 +- "then")
+                                 -- " " +> preserveBreakNln astContext e2) ctx
+                ++ "else " +> preserveBreakNln astContext en)
 
-    | IfThenElse(e1, e2, None) -> 
-        atCurrentColumn (!- "if " +> ifElse (checkBreakForExpr e1) (genExpr astContext e1 ++ "then") (genExpr astContext e1 +- "then") 
-                         -- " " +> preserveBreakNln astContext e2)
-    // At this stage, all symbolic operators have been handled.
-    | OptVar(s, isOpt) -> ifElse isOpt (!- "?") sepNone -- s
-    | LongIdentSet(s, e) -> !- (sprintf "%s <- " s) +> genExpr astContext e
-    | DotIndexedGet(e, es) -> genExpr astContext e -- "." +> sepOpenLFixed +> genIndexers astContext es +> sepCloseLFixed
-    | DotIndexedSet(e1, es, e2) -> genExpr astContext e1 -- ".[" +> genIndexers astContext es -- "] <- " +> genExpr astContext e2
-    | DotGet(e, s) -> 
-        genExpr { astContext with IsInsideDotGet = true } e -- sprintf ".%s" s
-    | DotSet(e1, s, e2) -> genExpr astContext e1 -- sprintf ".%s <- " s +> genExpr astContext e2
-    | LetOrUseBang(isUse, p, e1, e2) ->
-        atCurrentColumn (ifElse isUse (!- "use! ") (!- "let! ") 
-            +> genPat astContext p -- " = " +> genExpr astContext e1 +> sepNln +> genExpr astContext e2)
+        | IfThenElse(e1, e2, None) ->
+            atCurrentColumn (!- "if " +> ifElse (checkBreakForExpr e1) (genExpr astContext e1 ++ "then") (genExpr astContext e1 +- "then")
+                             -- " " +> preserveBreakNln astContext e2)
+        // At this stage, all symbolic operators have been handled.
+        | OptVar(s, isOpt) -> ifElse isOpt (!- "?") sepNone -- s
+        | LongIdentSet(s, e) -> !- (sprintf "%s <- " s) +> genExpr astContext e
+        | DotIndexedGet(e, es) -> genExpr astContext e -- "." +> sepOpenLFixed +> genIndexers astContext es +> sepCloseLFixed
+        | DotIndexedSet(e1, es, e2) -> genExpr astContext e1 -- ".[" +> genIndexers astContext es -- "] <- " +> genExpr astContext e2
+        | DotGet(e, s) ->
+            genExpr { astContext with IsInsideDotGet = true } e -- sprintf ".%s" s
+        | DotSet(e1, s, e2) -> genExpr astContext e1 -- sprintf ".%s <- " s +> genExpr astContext e2
+        | LetOrUseBang(isUse, p, e1, e2) ->
+            atCurrentColumn (ifElse isUse (!- "use! ") (!- "let! ")
+                +> genPat astContext p -- " = " +> genExpr astContext e1 +> sepNln +> genExpr astContext e2)
 
-    | ParsingError r -> 
-        raise <| FormatException (sprintf "Parsing error(s) between line %i column %i and line %i column %i" 
-            r.StartLine (r.StartColumn + 1) r.EndLine (r.EndColumn + 1))
-    | UnsupportedExpr r -> 
-        raise <| FormatException (sprintf "Unsupported construct(s) between line %i column %i and line %i column %i" 
-            r.StartLine (r.StartColumn + 1) r.EndLine (r.EndColumn + 1))
-    | e -> failwithf "Unexpected expression: %O" e
+        | ParsingError r ->
+            raise <| FormatException (sprintf "Parsing error(s) between line %i column %i and line %i column %i"
+                r.StartLine (r.StartColumn + 1) r.EndLine (r.EndColumn + 1))
+        | UnsupportedExpr r ->
+            raise <| FormatException (sprintf "Unsupported construct(s) between line %i column %i and line %i column %i"
+                r.StartLine (r.StartColumn + 1) r.EndLine (r.EndColumn + 1))
+        | e -> failwithf "Unexpected expression: %O" e
+    gen expr +> saveRange expr.Range
 
 and genLetOrUseList astContext = function
     | [p, x] -> genLetBinding { astContext with IsFirstChild = true } p x
@@ -620,19 +645,20 @@ and genLetOrUseList astContext = function
             col sepNln xs (fun (p, x) -> genLetBinding { astContext with IsFirstChild = p <> "and" } p x)
         | _ -> 
             col sepNln xs (fun (p, x) -> genLetBinding { astContext with IsFirstChild = p <> "and" } p x) 
-            +> rep 2 sepNln +> genLetOrUseList astContext ys
+            +> genLetOrUseList astContext ys
 
     | MultilineLetOrUseL(xs, ys) ->
         match ys with
         | [] -> 
-            col (rep 2 sepNln) xs (fun (p, x) -> genLetBinding { astContext with IsFirstChild = p <> "and" } p x)
+            col sepNone xs (fun (p, x) -> genLetBinding { astContext with IsFirstChild = p <> "and" } p x)
             // Add a trailing new line to separate these with the main expression
             +> sepNln 
         | _ -> 
-            col (rep 2 sepNln) xs (fun (p, x) -> genLetBinding { astContext with IsFirstChild = p <> "and" } p x) 
-            +> rep 2 sepNln +> genLetOrUseList astContext ys
+            col sepNone xs (fun (p, x) -> genLetBinding { astContext with IsFirstChild = p <> "and" } p x) 
+            +> genLetOrUseList astContext ys
 
-    | _ -> sepNone   
+    | _ -> sepNone
+    // genLetBinding will save last range
 
 /// When 'hasNewLine' is set, the operator is forced to be in a new line
 and genInfixApps astContext hasNewLine = function
@@ -644,155 +670,166 @@ and genInfixApps astContext hasNewLine = function
         +> genInfixApps astContext (hasNewLine || checkNewLine e es) es
 
     | [] -> sepNone
+/// genExpr will save ranges
 
 /// Use in indexed set and get only
 and genIndexers astContext = function
-    | Indexer(Pair(IndexedVar eo1, IndexedVar eo2)) :: es ->
+    | (Indexer(Pair(IndexedVar eo1, IndexedVar eo2)) as indexer) :: es ->
         ifElse (eo1.IsNone && eo2.IsNone) (!- "*") 
             (opt sepNone eo1 (genExpr astContext) -- ".." +> opt sepNone eo2 (genExpr astContext))
+        +> saveRange indexer.Range
         +> ifElse es.IsEmpty sepNone (sepComma +> genIndexers astContext es)
-    | Indexer(Single(IndexedVar eo)) :: es -> 
+    | (Indexer(Single(IndexedVar eo)) as indexer) :: es ->
         ifElse eo.IsNone (!- "*") (opt sepNone eo (genExpr astContext))
+        +> saveRange indexer.Range
         +> ifElse es.IsEmpty sepNone (sepComma +> genIndexers astContext es)
-    | Indexer(Single e) :: es -> 
-            genExpr astContext e +> ifElse es.IsEmpty sepNone (sepComma +> genIndexers astContext es)
+    | (Indexer(Single e) as indexer):: es ->
+            genExpr astContext e
+            +> saveRange indexer.Range
+            +>ifElse es.IsEmpty sepNone (sepComma +> genIndexers astContext es)
     | _ -> sepNone
 
-and genTypeDefn astContext (TypeDef(ats, px, ao, tds, tcs, tdr, ms, s)) = 
+and genTypeDefn astContext (TypeDef(ats, px, ao, tds, tcs, tdr, ms, s) as td) = 
     let typeName = 
         genPreXmlDoc px 
         +> ifElse astContext.IsFirstChild (genAttributes astContext ats -- "type ") 
             (!- "and " +> genOnelinerAttributes astContext ats) 
         +> opt sepSpace ao genAccess -- s
         +> genTypeParam astContext tds tcs
+    let gen =
+        match tdr with
+        | Simple(TDSREnum ecs) ->
+            typeName +> sepEq
+            +> indent +> sepNln
+            +> col sepNln ecs (genEnumCase { astContext with HasVerticalBar = true })
+            +> genMemberDefnList { astContext with IsInterface = false } ms
+            // Add newline after un-indent to be spacing-correct
+            +> unindent
 
-    match tdr with
-    | Simple(TDSREnum ecs) ->
-        typeName +> sepEq 
-        +> indent +> sepNln
-        +> col sepNln ecs (genEnumCase { astContext with HasVerticalBar = true })
-        +> genMemberDefnList { astContext with IsInterface = false } ms
-        // Add newline after un-indent to be spacing-correct
-        +> unindent
+        | Simple(TDSRUnion(ao', xs)) ->
+            typeName +> sepEq
+            +> indent +> sepNln +> opt sepNln ao' genAccess
+            +> col sepNln xs (genUnionCase { astContext with HasVerticalBar = true })
+            +> genMemberDefnList { astContext with IsInterface = false } ms
+            +> unindent
 
-    | Simple(TDSRUnion(ao', xs)) ->
-        typeName +> sepEq 
-        +> indent +> sepNln +> opt sepNln ao' genAccess 
-        +> col sepNln xs (genUnionCase { astContext with HasVerticalBar = true })
-        +> genMemberDefnList { astContext with IsInterface = false } ms
-        +> unindent
+        | Simple(TDSRRecord(ao', fs)) ->
+            typeName +> sepEq
+            +> indent +> sepNln +> opt sepSpace ao' genAccess +> sepOpenS
+            +> atCurrentColumn (col sepSemiNln fs (genField astContext "")) +> sepCloseS
+            +> genMemberDefnList { astContext with IsInterface = false } ms
+            +> unindent
 
-    | Simple(TDSRRecord(ao', fs)) ->
-        typeName +> sepEq 
-        +> indent +> sepNln +> opt sepSpace ao' genAccess +> sepOpenS 
-        +> atCurrentColumn (col sepSemiNln fs (genField astContext "")) +> sepCloseS
-        +> genMemberDefnList { astContext with IsInterface = false } ms 
-        +> unindent 
-
-    | Simple TDSRNone -> 
-        typeName
-    | Simple(TDSRTypeAbbrev t) -> 
-        typeName +> sepEq +> genType astContext false t
-    | Simple(TDSRException(ExceptionDefRepr(ats, px, ao, uc))) ->
-        genExceptionBody astContext ats px ao uc
-
-    | ObjectModel(TCSimple (TCStruct | TCInterface | TCClass) as tdk, MemberDefnList(impCtor, others)) ->
-        let isInterface =
-            match tdk with
-            | TCSimple TCInterface -> true
-            | _ -> false
-        let astContext = { astContext with IsInterface = isInterface}
-        typeName +> opt sepNone impCtor (genMemberDefn astContext) +> sepEq 
-        +> indent +> sepNln +> genTypeDefKind tdk
-        +> indent +> genMemberDefnList astContext others +> unindent
-        ++ "end" +> unindent
-
-    | ObjectModel(TCSimple TCAugmentation, _) ->
-        typeName -- " with" +> indent
-        // Remember that we use MemberDefn of parent node
-        +> genMemberDefnList { astContext with IsInterface = false } ms +> unindent
-
-    | ObjectModel(TCDelegate(FunType ts), _) ->
-        typeName +> sepEq -- "delegate of " +> genTypeList astContext ts
-    | ObjectModel(_, MemberDefnList(impCtor, others)) ->
-        typeName +> opt sepNone impCtor (genMemberDefn { astContext with IsInterface = false }) +> sepEq +> indent
-        +> genMemberDefnList { astContext with IsInterface = false } others +> unindent
-
-    | ExceptionRepr(ExceptionDefRepr(ats, px, ao, uc)) ->
-        genExceptionBody astContext ats px ao uc
-
-and genSigTypeDefn astContext (SigTypeDef(ats, px, ao, tds, tcs, tdr, ms, s)) = 
-    let typeName = 
-        genPreXmlDoc px 
-        +> ifElse astContext.IsFirstChild (genAttributes astContext ats -- "type ") 
-            (!- "and " +> genOnelinerAttributes astContext ats) 
-        +> opt sepSpace ao genAccess -- s
-        +> genTypeParam astContext tds tcs
-
-    match tdr with
-    | SigSimple(TDSREnum ecs) ->
-        typeName +> sepEq 
-        +> indent +> sepNln
-        +> col sepNln ecs (genEnumCase { astContext with HasVerticalBar = true })
-        +> colPre sepNln sepNln ms (genMemberSig astContext)
-        // Add newline after un-indent to be spacing-correct
-        +> unindent
-         
-    | SigSimple(TDSRUnion(ao', xs)) ->
-        typeName +> sepEq 
-        +> indent +> sepNln +> opt sepNln ao' genAccess 
-        +> col sepNln xs (genUnionCase { astContext with HasVerticalBar = true })
-        +> colPre sepNln sepNln ms (genMemberSig astContext)
-        +> unindent
-
-    | SigSimple(TDSRRecord(ao', fs)) ->
-        typeName +> sepEq 
-        +> indent +> sepNln +> opt sepNln ao' genAccess +> sepOpenS 
-        +> atCurrentColumn (col sepSemiNln fs (genField astContext "")) +> sepCloseS
-        +> colPre sepNln sepNln ms (genMemberSig astContext)
-        +> unindent 
-
-    | SigSimple TDSRNone -> 
-        typeName
-    | SigSimple(TDSRTypeAbbrev t) -> 
-        typeName +> sepEq +> genType astContext false t
-    | SigSimple(TDSRException(ExceptionDefRepr(ats, px, ao, uc))) ->
+        | Simple TDSRNone ->
+            typeName
+        | Simple(TDSRTypeAbbrev t) ->
+            typeName +> sepEq +> genType astContext false t
+        | Simple(TDSRException(ExceptionDefRepr(ats, px, ao, uc))) ->
             genExceptionBody astContext ats px ao uc
 
-    | SigObjectModel(TCSimple (TCStruct | TCInterface | TCClass) as tdk, mds) ->
-        typeName +> sepEq +> indent +> sepNln +> genTypeDefKind tdk
-        +> indent +> colPre sepNln sepNln mds (genMemberSig astContext) +> unindent
-        ++ "end" +> unindent
+        | ObjectModel(TCSimple (TCStruct | TCInterface | TCClass) as tdk, MemberDefnList(impCtor, others)) ->
+            let isInterface =
+                match tdk with
+                | TCSimple TCInterface -> true
+                | _ -> false
+            let astContext = { astContext with IsInterface = isInterface}
+            typeName +> opt sepNone impCtor (genMemberDefn astContext) +> sepEq
+            +> indent +> sepNln +> genTypeDefKind tdk
+            +> indent +> genMemberDefnList astContext others +> unindent
+            ++ "end" +> unindent
 
-    | SigObjectModel(TCSimple TCAugmentation, _) ->
-        typeName -- " with" +> indent +> sepNln 
-        // Remember that we use MemberSig of parent node
-        +> col sepNln ms (genMemberSig astContext) +> unindent
+        | ObjectModel(TCSimple TCAugmentation, _) ->
+            typeName -- " with" +> indent
+            // Remember that we use MemberDefn of parent node
+            +> genMemberDefnList { astContext with IsInterface = false } ms +> unindent
 
-    | SigObjectModel(TCDelegate(FunType ts), _) ->
-        typeName +> sepEq -- "delegate of " +> genTypeList astContext ts
-    | SigObjectModel(_, mds) -> 
-        typeName +> sepEq +> indent +> sepNln 
-        +> col sepNln mds (genMemberSig astContext) +> unindent
+        | ObjectModel(TCDelegate(FunType ts), _) ->
+            typeName +> sepEq -- "delegate of " +> genTypeList astContext ts
+        | ObjectModel(_, MemberDefnList(impCtor, others)) ->
+            typeName +> opt sepNone impCtor (genMemberDefn { astContext with IsInterface = false }) +> sepEq +> indent
+            +> genMemberDefnList { astContext with IsInterface = false } others +> unindent
 
-    | SigExceptionRepr(SigExceptionDefRepr(ats, px, ao, uc)) ->
-        genExceptionBody astContext ats px ao uc
+        | ExceptionRepr(ExceptionDefRepr(ats, px, ao, uc)) ->
+            genExceptionBody astContext ats px ao uc
+    gen +> saveRange td.Range
 
-and genMemberSig astContext = function
-    | MSMember(Val(ats, px, ao, s, t, vi, _), mf) -> 
-        let (FunType namedArgs) = (t, vi)
-        genPreXmlDoc px +> genAttributes astContext ats 
-        +> atCurrentColumn (indent +> genMemberFlags { astContext with IsInterface = false } mf +> opt sepNone ao genAccess
-                                   +> ifElse (s = "``new``") (!- "new") (!- s) 
-                                   +> sepColon +> genTypeList astContext namedArgs +> unindent)
+and genSigTypeDefn astContext (SigTypeDef(ats, px, ao, tds, tcs, tdr, ms, s) as std) =
+    let typeName = 
+        genPreXmlDoc px 
+        +> ifElse astContext.IsFirstChild (genAttributes astContext ats -- "type ") 
+            (!- "and " +> genOnelinerAttributes astContext ats) 
+        +> opt sepSpace ao genAccess -- s
+        +> genTypeParam astContext tds tcs
 
-    | MSInterface t -> !- "interface " +> genType astContext false t
-    | MSInherit t -> !- "inherit " +> genType astContext false t
-    | MSValField f -> genField astContext "val " f
-    | MSNestedType _ -> invalidArg "md" "This is not implemented in F# compiler"
+    let gen =
+        match tdr with
+        | SigSimple(TDSREnum ecs) ->
+            typeName +> sepEq
+            +> indent +> sepNln
+            +> col sepNln ecs (genEnumCase { astContext with HasVerticalBar = true })
+            +> colPre sepNln sepNln ms (genMemberSig astContext)
+            // Add newline after un-indent to be spacing-correct
+            +> unindent
+
+        | SigSimple(TDSRUnion(ao', xs)) ->
+            typeName +> sepEq
+            +> indent +> sepNln +> opt sepNln ao' genAccess
+            +> col sepNln xs (genUnionCase { astContext with HasVerticalBar = true })
+            +> colPre sepNln sepNln ms (genMemberSig astContext)
+            +> unindent
+
+        | SigSimple(TDSRRecord(ao', fs)) ->
+            typeName +> sepEq
+            +> indent +> sepNln +> opt sepNln ao' genAccess +> sepOpenS
+            +> atCurrentColumn (col sepSemiNln fs (genField astContext "")) +> sepCloseS
+            +> colPre sepNln sepNln ms (genMemberSig astContext)
+            +> unindent
+
+        | SigSimple TDSRNone ->
+            typeName
+        | SigSimple(TDSRTypeAbbrev t) ->
+            typeName +> sepEq +> genType astContext false t
+        | SigSimple(TDSRException(ExceptionDefRepr(ats, px, ao, uc))) ->
+                genExceptionBody astContext ats px ao uc
+
+        | SigObjectModel(TCSimple (TCStruct | TCInterface | TCClass) as tdk, mds) ->
+            typeName +> sepEq +> indent +> sepNln +> genTypeDefKind tdk
+            +> indent +> colPre sepNln sepNln mds (genMemberSig astContext) +> unindent
+            ++ "end" +> unindent
+
+        | SigObjectModel(TCSimple TCAugmentation, _) ->
+            typeName -- " with" +> indent +> sepNln
+            // Remember that we use MemberSig of parent node
+            +> col sepNln ms (genMemberSig astContext) +> unindent
+
+        | SigObjectModel(TCDelegate(FunType ts), _) ->
+            typeName +> sepEq -- "delegate of " +> genTypeList astContext ts
+        | SigObjectModel(_, mds) ->
+            typeName +> sepEq +> indent +> sepNln
+            +> col sepNln mds (genMemberSig astContext) +> unindent
+
+        | SigExceptionRepr(SigExceptionDefRepr(ats, px, ao, uc)) ->
+            genExceptionBody astContext ats px ao uc
+    gen +> saveRange (getRangeFromSynTypeDefnSig std)
+
+and genMemberSig astContext sms =
+    let gen = function
+        | MSMember(Val(ats, px, ao, s, t, vi, _, _), mf) ->
+            let (FunType namedArgs) = (t, vi)
+            genPreXmlDoc px +> genAttributes astContext ats
+            +> atCurrentColumn (indent +> genMemberFlags { astContext with IsInterface = false } mf +> opt sepNone ao genAccess
+                                       +> ifElse (s = "``new``") (!- "new") (!- s)
+                                       +> sepColon +> genTypeList astContext namedArgs +> unindent)
+
+        | MSInterface t -> !- "interface " +> genType astContext false t
+        | MSInherit t -> !- "inherit " +> genType astContext false t
+        | MSValField f -> genField astContext "val " f
+        | MSNestedType _ -> invalidArg "md" "This is not implemented in F# compiler"
+    gen sms +> saveRange (getRangeFromSynMemberSig sms)
 
 and genTyparDecl astContext (TyparDecl(ats, tp)) =
     genOnelinerAttributes astContext ats +> genTypar astContext tp
+    // genTypar will save range
 
 and genTypeDefKind = function
     | TCSimple TCUnspecified -> sepNone
@@ -821,24 +858,28 @@ and genSigException astContext (SigExceptionDef(ats, px, ao, uc, ms)) =
     genExceptionBody astContext ats px ao uc 
     +> colPre sepNln sepNln ms (genMemberSig astContext)
 
-and genUnionCase astContext (UnionCase(ats, px, _, s, UnionCaseType fs)) =
+and genUnionCase astContext (UnionCase(ats, px, _, s, UnionCaseType fs) as uc) =
     genPreXmlDoc px
     +> ifElse astContext.HasVerticalBar sepBar sepNone
     +> genOnelinerAttributes astContext ats -- s 
     +> colPre wordOf sepStar fs (genField { astContext with IsUnionField = true } "")
+    +> saveRange uc.Range
 
-and genEnumCase astContext (EnumCase(ats, px, _, c)) =
+and genEnumCase astContext (EnumCase(ats, px, _, c) as ec) =
     genPreXmlDoc px 
     +> ifElse astContext.HasVerticalBar sepBar sepNone 
     +> genOnelinerAttributes astContext ats +> genConst c
+    +> saveRange ec.Range
 
-and genField astContext prefix (Field(ats, px, ao, isStatic, isMutable, t, so)) = 
+and genField astContext prefix (Field(ats, px, ao, isStatic, isMutable, t, so) as field) =
     // Being protective on union case declaration
     let t = genType astContext astContext.IsUnionField t
     genPreXmlDoc px 
     +> genAttributes astContext ats +> ifElse isStatic (!- "static ") sepNone -- prefix
     +> ifElse isMutable (!- "mutable ") sepNone +> opt sepSpace ao genAccess  
     +> opt sepColon so (!-) +> t
+    // maybe it would be enough to have range from genType
+    +> saveRange (getRangeFromSynField field)
 
 and genType astContext outerBracket t =
     let rec loop = function
@@ -877,14 +918,15 @@ and genType astContext outerBracket t =
         | [(_, t)] -> loop t
         | (isDivide, t) :: ts ->
             loop t -- (if isDivide then " / " else " * ") +> loopTTupleList ts
-
-    match t with
-    | TFun(TTuple ts, t) -> 
-        ifElse outerBracket (sepOpenT +> loopTTupleList ts +> sepArrow +> loop t +> sepCloseT)
-            (loopTTupleList ts +> sepArrow +> loop t)
-    | TFuns ts -> ifElse outerBracket (sepOpenT +> col sepArrow ts loop +> sepCloseT) (col sepArrow ts loop)
-    | TTuple ts -> ifElse outerBracket (sepOpenT +> loopTTupleList ts +> sepCloseT) (loopTTupleList ts)
-    | _ -> loop t
+    let gen =
+        match t with
+        | TFun(TTuple ts, t) ->
+            ifElse outerBracket (sepOpenT +> loopTTupleList ts +> sepArrow +> loop t +> sepCloseT)
+                (loopTTupleList ts +> sepArrow +> loop t)
+        | TFuns ts -> ifElse outerBracket (sepOpenT +> col sepArrow ts loop +> sepCloseT) (col sepArrow ts loop)
+        | TTuple ts -> ifElse outerBracket (sepOpenT +> loopTTupleList ts +> sepCloseT) (loopTTupleList ts)
+        | _ -> loop t
+    gen +> saveRange t.Range
   
 and genPrefixTypes astContext = function
     | [] -> sepNone
@@ -892,6 +934,7 @@ and genPrefixTypes astContext = function
     | (TStaticConstant _ | TStaticConstantExpr _ | TStaticConstantNamed _ | TVar(Typar(_, true)) as t)::ts -> 
         !- "< " +> col sepComma (t::ts) (genType astContext false) -- " >"
     | ts -> !- "<" +> col sepComma ts (genType astContext false) -- ">"
+    // last genType will save range
 
 and genTypeList astContext = function
     | [] -> sepNone
@@ -924,31 +967,38 @@ and genTypeList astContext = function
     | (t, _)::ts -> 
         let gt = genType astContext false t
         gt +> ifElse ts.IsEmpty sepNone (autoNln (sepArrow +> genTypeList astContext ts))
+    // last genType will save range
 
-and genTypar astContext (Typar(s, isHead)) = 
+and genTypar astContext (Typar(s, isHead) as st) = 
     ifElse isHead (ifElse astContext.IsFirstTypeParam (!- " ^") (!- "^")) (!-"'") -- s
+    +> saveRange st.Range
     
-and genTypeConstraint astContext = function
-    | TyparSingle(kind, tp) -> genTypar astContext tp +> sepColon -- sprintf "%O" kind
-    | TyparDefaultsToType(tp, t) -> !- "default " +> genTypar astContext tp +> sepColon +> genType astContext false t
-    | TyparSubtypeOfType(tp, t) -> genTypar astContext tp -- " :> " +> genType astContext false t
-    | TyparSupportsMember(tps, msg) -> 
-        genTyparList astContext tps +> sepColon +> sepOpenT +> genMemberSig astContext msg +> sepCloseT
-    | TyparIsEnum(tp, ts) -> 
-        genTypar astContext tp +> sepColon -- "enum<" +> col sepComma ts (genType astContext false) -- ">"
-    | TyparIsDelegate(tp, ts) ->
-        genTypar astContext tp +> sepColon -- "delegate<" +> col sepComma ts (genType astContext false) -- ">"
+and genTypeConstraint astContext stc =
+    let gen = function
+        | TyparSingle(kind, tp) -> genTypar astContext tp +> sepColon -- sprintf "%O" kind
+        | TyparDefaultsToType(tp, t) -> !- "default " +> genTypar astContext tp +> sepColon +> genType astContext false t
+        | TyparSubtypeOfType(tp, t) -> genTypar astContext tp -- " :> " +> genType astContext false t
+        | TyparSupportsMember(tps, msg) -> 
+            genTyparList astContext tps +> sepColon +> sepOpenT +> genMemberSig astContext msg +> sepCloseT
+        | TyparIsEnum(tp, ts) -> 
+            genTypar astContext tp +> sepColon -- "enum<" +> col sepComma ts (genType astContext false) -- ">"
+        | TyparIsDelegate(tp, ts) ->
+            genTypar astContext tp +> sepColon -- "delegate<" +> col sepComma ts (genType astContext false) -- ">"
+    gen stc +> saveRange (getRangeFromSynTypeConstraint stc)
+    
+and genInterfaceImpl astContext (InterfaceImpl(t, bs) as ii) =
+    let gen =
+        match bs with
+        | [] -> !- "interface " +> genType astContext false t
+        | bs ->
+            !- "interface " +> genType astContext false t -- " with"
+            +> indent +> sepNln +> genMemberBindingList { astContext with IsInterface = true } bs +> unindent
+    gen +> saveRange (getRangeFromSynInterfaceImpl ii)
 
-and genInterfaceImpl astContext (InterfaceImpl(t, bs)) = 
-    match bs with
-    | [] -> !- "interface " +> genType astContext false t
-    | bs ->
-        !- "interface " +> genType astContext false t -- " with"
-        +> indent +> sepNln +> genMemberBindingList { astContext with IsInterface = true } bs +> unindent
-
-and genClause astContext hasBar (Clause(p, e, eo)) = 
+and genClause astContext hasBar (Clause(p, e, eo) as clause) =
     ifElse hasBar sepBar sepNone +> genPat astContext p 
     +> optPre (!- " when ") sepNone eo (genExpr astContext) +> sepArrow +> preserveBreakNln astContext e
+    +> saveRange clause.Range
 
 /// Each multiline member definition has a pre and post new line. 
 and genMemberDefnList astContext = function
@@ -958,79 +1008,81 @@ and genMemberDefnList astContext = function
         fun ctx ->
             let xs = sortAndDeduplicate ((|MDOpen|_|) >> Option.get) xs ctx
             match ys with
-            | [] -> col sepNln xs (genMemberDefn astContext) ctx
-            | _ -> (col sepNln xs (genMemberDefn astContext) +> rep 2 sepNln +> genMemberDefnList astContext ys) ctx
+            | [] -> col sepNone xs (genMemberDefn astContext) ctx
+            | _ -> (col sepNone xs (genMemberDefn astContext) +> genMemberDefnList astContext ys) ctx
 
-    | MultilineMemberDefnL(xs, []) ->
-        rep 2 sepNln 
-        +> col (rep 2 sepNln) xs (function
+    | MultilineMemberDefnL(xs, []) -> 
+        col sepNone xs (function
                 | Pair(x1, x2) -> genPropertyWithGetSet astContext (x1, x2)
                 | Single x -> genMemberDefn astContext x)
 
-    | MultilineMemberDefnL(xs, ys) ->
-        rep 2 sepNln 
-        +> col (rep 2 sepNln) xs (function
+    | MultilineMemberDefnL(xs, ys) -> 
+        col sepNone xs (function
                 | Pair(x1, x2) -> genPropertyWithGetSet astContext (x1, x2)
                 | Single x -> genMemberDefn astContext x) 
-        +> sepNln +> genMemberDefnList astContext ys
+        +> genMemberDefnList astContext ys
 
     | OneLinerMemberDefnL(xs, ys) ->
-        sepNln +> col sepNln xs (genMemberDefn astContext) +> genMemberDefnList astContext ys
+        col sepNone xs (genMemberDefn astContext) +> genMemberDefnList astContext ys
     | _ -> sepNone
+    // genMemberDefn will save range.
+    // Here we must think about saving empty lines
 
-and genMemberDefn astContext = function
-    | MDNestedType _ -> invalidArg "md" "This is not implemented in F# compiler"
-    | MDOpen(s) -> !- (sprintf "open %s" s)
-    // What is the role of so
-    | MDImplicitInherit(t, e, _) -> !- "inherit " +> genType astContext false t +> genExpr astContext e
-    | MDInherit(t, _) -> !- "inherit " +> genType astContext false t
-    | MDValField f -> genField astContext "val " f
-    | MDImplicitCtor(ats, ao, ps, so) -> 
-        // In implicit constructor, attributes should come even before access qualifiers
-        ifElse ats.IsEmpty sepNone (sepSpace +> genOnelinerAttributes astContext ats)
-        +> optPre sepSpace sepSpace ao genAccess +> sepOpenT
-        +> col sepComma ps (genSimplePat astContext) +> sepCloseT
-        +> optPre (!- " as ") sepNone so (!-)
-
-    | MDMember(b) -> genMemberBinding astContext b
-    | MDLetBindings(isStatic, isRec, b::bs) ->
-        let prefix = 
-            if isStatic && isRec then "static let rec "
-            elif isStatic then "static let "
-            elif isRec then "let rec "
-            else "let "
-
-        genLetBinding { astContext with IsFirstChild = true } prefix b 
-        +> colPre sepNln sepNln bs (genLetBinding { astContext with IsFirstChild = false } "and ")
-
-    | MDInterface(t, mdo) -> 
-        !- "interface " +> genType astContext false t
-        +> opt sepNone mdo 
-            (fun mds -> !- " with" +> indent +> genMemberDefnList { astContext with IsInterface = true } mds +> unindent)
-
-    | MDAutoProperty(ats, px, ao, mk, e, s, _isStatic, typeOpt, memberKindToMemberFlags) ->
-        let isFunctionProperty =
-            match typeOpt with
-            | Some (TFun _) -> true
-            | _ -> false
-        genPreXmlDoc px
-        +> genAttributes astContext ats +> genMemberFlags astContext (memberKindToMemberFlags mk) +> str "val "
-        +> opt sepSpace ao genAccess -- s +> optPre sepColon sepNone typeOpt (genType astContext false)
-         +> sepEq +> genExpr astContext e -- genPropertyKind (not isFunctionProperty) mk
-
-    | MDAbstractSlot(ats, px, ao, s, t, vi, ValTyparDecls(tds, _, tcs), MFMemberFlags mk) ->
-        let (FunType namedArgs) = (t, vi)
-        let isFunctionProperty =
-            match t with
-            | TFun _ -> true
-            | _ -> false
-        genPreXmlDoc px 
-        +> genAttributes astContext ats
-        +> opt sepSpace ao genAccess -- sprintf "abstract %s" s
-        +> genTypeParam astContext tds tcs
-        +> sepColon +> genTypeList astContext namedArgs -- genPropertyKind (not isFunctionProperty) mk
-
-    | md -> failwithf "Unexpected member definition: %O" md
+and genMemberDefn astContext smd =
+    let gen = function
+        | MDNestedType _ -> invalidArg "md" "This is not implemented in F# compiler"
+        | MDOpen(s) -> !- (sprintf "open %s" s)
+        // What is the role of so
+        | MDImplicitInherit(t, e, _) -> !- "inherit " +> genType astContext false t +> genExpr astContext e
+        | MDInherit(t, _) -> !- "inherit " +> genType astContext false t
+        | MDValField f -> genField astContext "val " f
+        | MDImplicitCtor(ats, ao, ps, so) -> 
+            // In implicit constructor, attributes should come even before access qualifiers
+            ifElse ats.IsEmpty sepNone (sepSpace +> genOnelinerAttributes astContext ats)
+            +> optPre sepSpace sepSpace ao genAccess +> sepOpenT
+            +> col sepComma ps (genSimplePat astContext) +> sepCloseT
+            +> optPre (!- " as ") sepNone so (!-)
+    
+        | MDMember(b) -> genMemberBinding astContext b
+        | MDLetBindings(isStatic, isRec, b::bs) ->
+            let prefix = 
+                if isStatic && isRec then "static let rec "
+                elif isStatic then "static let "
+                elif isRec then "let rec "
+                else "let "
+    
+            genLetBinding { astContext with IsFirstChild = true } prefix b 
+            +> colPre sepNln sepNln bs (genLetBinding { astContext with IsFirstChild = false } "and ")
+    
+        | MDInterface(t, mdo) -> 
+            !- "interface " +> genType astContext false t
+            +> opt sepNone mdo 
+                (fun mds -> !- " with" +> indent +> genMemberDefnList { astContext with IsInterface = true } mds +> unindent)
+    
+        | MDAutoProperty(ats, px, ao, mk, e, s, _isStatic, typeOpt, memberKindToMemberFlags) ->
+            let isFunctionProperty =
+                match typeOpt with
+                | Some (TFun _) -> true
+                | _ -> false
+            genPreXmlDoc px
+            +> genAttributes astContext ats +> genMemberFlags astContext (memberKindToMemberFlags mk) +> str "val "
+            +> opt sepSpace ao genAccess -- s +> optPre sepColon sepNone typeOpt (genType astContext false)
+             +> sepEq +> genExpr astContext e -- genPropertyKind (not isFunctionProperty) mk
+    
+        | MDAbstractSlot(ats, px, ao, s, t, vi, ValTyparDecls(tds, _, tcs), MFMemberFlags mk) ->
+            let (FunType namedArgs) = (t, vi)
+            let isFunctionProperty =
+                match t with
+                | TFun _ -> true
+                | _ -> false
+            genPreXmlDoc px 
+            +> genAttributes astContext ats
+            +> opt sepSpace ao genAccess -- sprintf "abstract %s" s
+            +> genTypeParam astContext tds tcs
+            +> sepColon +> genTypeList astContext namedArgs -- genPropertyKind (not isFunctionProperty) mk
+    
+        | md -> failwithf "Unexpected member definition: %O" md
+    sepConstructs smd.Range +> gen smd +> saveRange smd.Range
 
 and genPropertyKind useSyntacticSugar = function
     | PropertyGet -> 
@@ -1040,98 +1092,108 @@ and genPropertyKind useSyntacticSugar = function
     | PropertyGetSet -> " with get, set"
     | _ -> ""
 
-and genSimplePat astContext = function
-    | SPId(s, isOptArg, _) -> ifElse isOptArg (!- (sprintf "?%s" s)) (!- s)
-    | SPTyped(sp, t) -> genSimplePat astContext sp +> sepColon +> genType astContext false t
-    | SPAttrib(ats, sp) -> genOnelinerAttributes astContext ats +> genSimplePat astContext sp
+and genSimplePat astContext ssp =
+    let gen = function
+        | SPId(s, isOptArg, _) -> ifElse isOptArg (!- (sprintf "?%s" s)) (!- s)
+        | SPTyped(sp, t) -> genSimplePat astContext sp +> sepColon +> genType astContext false t
+        | SPAttrib(ats, sp) -> genOnelinerAttributes astContext ats +> genSimplePat astContext sp
+    gen ssp +> saveRange (getRangeFromSynSimplePat ssp)
     
-and genSimplePats astContext = function
-    // Remove parentheses on an extremely simple pattern
-    | SimplePats [SPId _ as sp] -> genSimplePat astContext sp
-    | SimplePats ps -> sepOpenT +> col sepComma ps (genSimplePat astContext) +> sepCloseT
-    | SPSTyped(ps, t) -> genSimplePats astContext ps +> sepColon +> genType astContext false t
+and genSimplePats astContext ssps =
+    let gen = function
+        // Remove parentheses on an extremely simple pattern
+        | SimplePats [SPId _ as sp] -> genSimplePat astContext sp
+        | SimplePats ps -> sepOpenT +> col sepComma ps (genSimplePat astContext) +> sepCloseT
+        | SPSTyped(ps, t) -> genSimplePats astContext ps +> sepColon +> genType astContext false t
+    gen ssps +> saveRange (getRangeFromSynSimplePats ssps)
 
 and genComplexPat astContext = function
     | CPId p -> genPat astContext p
     | CPSimpleId(s, isOptArg, _) -> ifElse isOptArg (!- (sprintf "?%s" s)) (!- s)
     | CPTyped(sp, t) -> genComplexPat astContext sp +> sepColon +> genType astContext false t
     | CPAttrib(ats, sp) -> genOnelinerAttributes astContext ats +> genComplexPat astContext sp
+    // genPat will save last range
 
 and genComplexPats astContext = function
     | ComplexPats [c] -> genComplexPat astContext c
     | ComplexPats ps -> sepOpenT +> col sepComma ps (genComplexPat astContext) +> sepCloseT
     | ComplexTyped(ps, t) -> genComplexPats astContext ps +> sepColon +> genType astContext false t
+    // genPat will save last range
 
 and genPatRecordFieldName astContext (PatRecordFieldName(s1, s2, p)) =
     ifElse (s1 = "") (!- (sprintf "%s = " s2)) (!- (sprintf "%s.%s = " s1 s2)) +> genPat astContext p
+    // genPat will save last range
 
 and genPatWithIdent astContext (ido, p) = 
     opt sepEq ido (!-) +> genPat astContext p
+    // genPat will save last range
 
-and genPat astContext = function
-    | PatOptionalVal(s) -> !- (sprintf "?%s" s)
-    | PatAttrib(p, ats) -> genOnelinerAttributes astContext ats +> genPat astContext p
-    | PatOr(p1, p2) -> genPat astContext p1 -- " | " +> genPat astContext p2
-    | PatAnds(ps) -> col (!- " & ") ps (genPat astContext)
-    | PatNullary PatNull -> !- "null"
-    | PatNullary PatWild -> sepWild
-    | PatTyped(p, t) -> 
-        // CStyle patterns only occur on extern declaration so it doesn't escalate to expressions
-        // We lookup sources to get extern types since it has quite many exceptions compared to normal F# types
-        let genTypeByLookup t =
-            fun ctx -> 
-                if ctx.Config.StrictMode then
-                    genType astContext false t ctx
-                else
-                    match lookup t.Range ctx with
-                    | Some typ ->
-                        str typ ctx
-                    | None ->
+and genPat astContext p =
+    let gen = function
+        | PatOptionalVal(s) -> !- (sprintf "?%s" s)
+        | PatAttrib(p, ats) -> genOnelinerAttributes astContext ats +> genPat astContext p
+        | PatOr(p1, p2) -> genPat astContext p1 -- " | " +> genPat astContext p2
+        | PatAnds(ps) -> col (!- " & ") ps (genPat astContext)
+        | PatNullary PatNull -> !- "null"
+        | PatNullary PatWild -> sepWild
+        | PatTyped(p, t) ->
+            // CStyle patterns only occur on extern declaration so it doesn't escalate to expressions
+            // We lookup sources to get extern types since it has quite many exceptions compared to normal F# types
+            let genTypeByLookup t =
+                fun ctx ->
+                    if ctx.Config.StrictMode then
                         genType astContext false t ctx
+                    else
+                        match lookup t.Range ctx with
+                        | Some typ ->
+                            str typ ctx
+                        | None ->
+                            genType astContext false t ctx
 
-        ifElse astContext.IsCStylePattern (genTypeByLookup t +> sepSpace +> genPat astContext p)
-            (genPat astContext p +> sepColon +> genType astContext false t) 
-    | PatNamed(ao, PatNullary PatWild, s) -> opt sepSpace ao genAccess -- s
-    | PatNamed(ao, p, s) -> opt sepSpace ao genAccess +> genPat astContext p -- sprintf " as %s" s 
-    | PatLongIdent(ao, s, ps, tpso) -> 
-        let aoc = opt sepSpace ao genAccess
-        let tpsoc = opt sepNone tpso (fun (ValTyparDecls(tds, _, tcs)) -> genTypeParam astContext tds tcs)
-        // Override escaped new keyword
-        let s = if s = "``new``" then "new" else s
-        match ps with
-        | [] ->  aoc -- s +> tpsoc
-        | [(_, PatTuple [p1; p2])] when s = "(::)" -> 
-            aoc +> genPat astContext p1 -- " :: " +> genPat astContext p2
-        | [(ido, p) as ip] -> 
-            aoc -- s +> tpsoc +> 
-            ifElse (hasParenInPat p || Option.isSome ido) (ifElse (addSpaceBeforeParensInFunDef s p) sepBeforeArg sepNone) sepSpace 
-            +> ifElse (Option.isSome ido) (sepOpenT +> genPatWithIdent astContext ip +> sepCloseT) (genPatWithIdent astContext ip)
-        // This pattern is potentially long
-        | ps -> 
-            let hasBracket = ps |> Seq.map fst |> Seq.exists Option.isSome
-            atCurrentColumn (aoc -- s +> tpsoc +> sepSpace 
-                +> ifElse hasBracket sepOpenT sepNone 
-                +> colAutoNlnSkip0 (ifElse hasBracket sepSemi sepSpace) ps (genPatWithIdent astContext)
-                +> ifElse hasBracket sepCloseT sepNone)
+            ifElse astContext.IsCStylePattern (genTypeByLookup t +> sepSpace +> genPat astContext p)
+                (genPat astContext p +> sepColon +> genType astContext false t)
+        | PatNamed(ao, PatNullary PatWild, s) -> opt sepSpace ao genAccess -- s
+        | PatNamed(ao, p, s) -> opt sepSpace ao genAccess +> genPat astContext p -- sprintf " as %s" s
+        | PatLongIdent(ao, s, ps, tpso) ->
+            let aoc = opt sepSpace ao genAccess
+            let tpsoc = opt sepNone tpso (fun (ValTyparDecls(tds, _, tcs)) -> genTypeParam astContext tds tcs)
+            // Override escaped new keyword
+            let s = if s = "``new``" then "new" else s
+            match ps with
+            | [] ->  aoc -- s +> tpsoc
+            | [(_, PatTuple [p1; p2])] when s = "(::)" ->
+                aoc +> genPat astContext p1 -- " :: " +> genPat astContext p2
+            | [(ido, p) as ip] ->
+                aoc -- s +> tpsoc +>
+                ifElse (hasParenInPat p || Option.isSome ido) (ifElse (addSpaceBeforeParensInFunDef s p) sepBeforeArg sepNone) sepSpace
+                +> ifElse (Option.isSome ido) (sepOpenT +> genPatWithIdent astContext ip +> sepCloseT) (genPatWithIdent astContext ip)
+            // This pattern is potentially long
+            | ps ->
+                let hasBracket = ps |> Seq.map fst |> Seq.exists Option.isSome
+                atCurrentColumn (aoc -- s +> tpsoc +> sepSpace
+                    +> ifElse hasBracket sepOpenT sepNone
+                    +> colAutoNlnSkip0 (ifElse hasBracket sepSemi sepSpace) ps (genPatWithIdent astContext)
+                    +> ifElse hasBracket sepCloseT sepNone)
 
-    | PatParen(PatConst(Const "()", _)) -> !- "()"
-    | PatParen(p) -> sepOpenT +> genPat astContext p +> sepCloseT
-    | PatTuple ps -> 
-        atCurrentColumn (colAutoNlnSkip0 sepComma ps (genPat astContext))
-    | PatSeq(PatList, ps) -> 
-        ifElse ps.IsEmpty (sepOpenLFixed +> sepCloseLFixed) 
-            (sepOpenL +> atCurrentColumn (colAutoNlnSkip0 sepSemi ps (genPat astContext)) +> sepCloseL)
+        | PatParen(PatConst(Const "()", _)) -> !- "()"
+        | PatParen(p) -> sepOpenT +> genPat astContext p +> sepCloseT
+        | PatTuple ps ->
+            atCurrentColumn (colAutoNlnSkip0 sepComma ps (genPat astContext))
+        | PatSeq(PatList, ps) ->
+            ifElse ps.IsEmpty (sepOpenLFixed +> sepCloseLFixed)
+                (sepOpenL +> atCurrentColumn (colAutoNlnSkip0 sepSemi ps (genPat astContext)) +> sepCloseL)
 
-    | PatSeq(PatArray, ps) -> 
-        ifElse ps.IsEmpty (sepOpenAFixed +> sepCloseAFixed)
-            (sepOpenA +> atCurrentColumn (colAutoNlnSkip0 sepSemi ps (genPat astContext)) +> sepCloseA)
+        | PatSeq(PatArray, ps) ->
+            ifElse ps.IsEmpty (sepOpenAFixed +> sepCloseAFixed)
+                (sepOpenA +> atCurrentColumn (colAutoNlnSkip0 sepSemi ps (genPat astContext)) +> sepCloseA)
 
-    | PatRecord(xs) -> 
-        sepOpenS +> atCurrentColumn (colAutoNlnSkip0 sepSemi xs (genPatRecordFieldName astContext)) +> sepCloseS
-    | PatConst(c) -> genConst c
-    | PatIsInst(t) -> 
-        // Should have brackets around in the type test patterns
-        !- ":? " +> genType astContext true t
-    // Quotes will be printed by inner expression
-    | PatQuoteExpr e -> genExpr astContext e
-    | p -> failwithf "Unexpected pattern: %O" p
+        | PatRecord(xs) ->
+            sepOpenS +> atCurrentColumn (colAutoNlnSkip0 sepSemi xs (genPatRecordFieldName astContext)) +> sepCloseS
+        | PatConst(c) -> genConst c
+        | PatIsInst(t) ->
+            // Should have brackets around in the type test patterns
+            !- ":? " +> genType astContext true t
+        // Quotes will be printed by inner expression
+        | PatQuoteExpr e -> genExpr astContext e
+        | p -> failwithf "Unexpected pattern: %O" p
+    gen p +> saveRange p.Range

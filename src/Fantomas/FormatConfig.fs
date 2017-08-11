@@ -119,6 +119,7 @@ type internal Context =
     { Config : FormatConfig; 
       Writer : ColumnIndentedTextWriter;
       mutable BreakLines : bool;
+      mutable RangeOfPreviousASTElement : range option;
       BreakOn : string -> bool;
       /// The original source string to query as a last resort 
       Content : string; 
@@ -133,8 +134,9 @@ type internal Context =
     static member Default = 
         { Config = FormatConfig.Default;
           Writer = new ColumnIndentedTextWriter(new StringWriter());
-          BreakLines = true; BreakOn = (fun _ -> false); 
-          Content = ""; Positions = [||]; Comments = Dictionary(); Directives = Dictionary() }
+          BreakLines = true; RangeOfPreviousASTElement = None;
+          BreakOn = (fun _ -> false); Content = ""; Positions = [||];
+          Comments = Dictionary(); Directives = Dictionary() }
 
     static member create config (content : string) =
         let content = String.normalizeNewLine content
@@ -298,6 +300,11 @@ let internal sepArrow = !- " -> "
 let internal sepWild = !- "_"
 let internal sepNone = id
 let internal sepBar = !- "| "
+
+let internal sepConstructs (currentRange : range) (ctx : Context) =
+    match ctx.RangeOfPreviousASTElement with
+    | None -> ctx
+    | Some r -> ctx |> rep (2 + 0 * (r.EndLine - currentRange.StartLine)) sepNln
 
 /// opening token of list
 let internal sepOpenL (ctx : Context) =  

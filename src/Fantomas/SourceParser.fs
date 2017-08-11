@@ -44,6 +44,48 @@ let lookup (r : range) (c : Context) =
             else Some s
     else None
 
+let saveRange (newRange : range) (ctx : Context) =
+    ctx.RangeOfPreviousASTElement <- Some newRange
+    ctx
+
+let getRangeFromSynTypeConstraint = function
+    | WhereTyparIsValueType (range = m)
+    | WhereTyparIsReferenceType (range = m)
+    | WhereTyparIsUnmanaged (range = m)
+    | WhereTyparSupportsNull (range = m)
+    | WhereTyparIsComparable (range = m)
+    | WhereTyparIsEquatable (range = m)
+    | WhereTyparDefaultsToType (range = m)
+    | WhereTyparSubtypeOfType (range = m)
+    | WhereTyparSupportsMember (range = m)
+    | WhereTyparIsEnum (range = m)
+    | WhereTyparIsDelegate (range = m) -> m
+
+let getRangeFromSynSimplePat = function
+    | SynSimplePat.Id (range = m)
+    | SynSimplePat.Typed (range = m)
+    | SynSimplePat.Attrib (range = m) -> m
+
+let getRangeFromSynSimplePats = function
+    | SynSimplePats.SimplePats (range = m)
+    | SynSimplePats.Typed (range = m) -> m
+
+let getRangeFromSynTypeDefnSig = function
+    | TypeDefnSig(range = m) -> m
+
+let getRangeFromSynMemberSig = function
+    | SynMemberSig.Member (range = m)
+    | SynMemberSig.Interface (range = m)
+    | SynMemberSig.Inherit (range = m)
+    | SynMemberSig.ValField (range = m)
+    | SynMemberSig.NestedType (range = m) -> m
+
+let getRangeFromSynField = function
+    | SynField.Field(range = m) -> m
+
+let getRangeFromSynInterfaceImpl = function
+    | SynInterfaceImpl.InterfaceImpl (range = m) -> m
+
 let (|Ident|) (s : Ident) = 
     let ident = s.idText
     match ident with
@@ -203,7 +245,7 @@ let (|SigModuleOrNamespace|) (SynModuleOrNamespaceSig.SynModuleOrNamespaceSig(Lo
 
 let (|Attribute|) (a : SynAttribute) =
     let (LongIdentWithDots s) = a.TypeName
-    (s, a.ArgExpr, Option.map (|Ident|) a.Target)
+    (s, a.ArgExpr, Option.map (|Ident|) a.Target, a.Range)
 
 // Access modifiers
 
@@ -1174,8 +1216,8 @@ let (|MSMember|MSInterface|MSInherit|MSValField|MSNestedType|) = function
     | SynMemberSig.ValField(f, _) -> MSValField f
     | SynMemberSig.NestedType(tds, _) -> MSNestedType tds
 
-let (|Val|) (ValSpfn(ats, IdentOrKeyword(OpNameFull s), tds, t, vi, _, _, px, ao, _, _)) =
-    (ats, px, ao, s, t, vi, tds)
+let (|Val|) (ValSpfn(ats, IdentOrKeyword(OpNameFull s), tds, t, vi, _, _, px, ao, _, r)) =
+    (ats, px, ao, s, t, vi, tds, r)
 
 // Misc
 
@@ -1202,7 +1244,7 @@ let (|FunType|) (t, ValInfo(argTypes, returnType)) =
 /// A rudimentary recognizer for extern functions
 /// Probably we should use lexing information to improve its accuracy
 let (|Extern|_|) = function
-    | Let(LetBinding([Attribute(name, _, _)] as ats, px, ao, _, _, PatLongIdent(_, s, [_, PatTuple ps], _), TypedExpr(Typed, _, t)))
+    | Let(LetBinding([Attribute(name, _, _, _)] as ats, px, ao, _, _, PatLongIdent(_, s, [_, PatTuple ps], _), TypedExpr(Typed, _, t)))
         when name.EndsWith("DllImport") ->
         Some(ats, px, ao, t, s, ps)
     | _ -> None
