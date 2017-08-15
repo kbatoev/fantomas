@@ -89,18 +89,27 @@ let getRangeFromSynInterfaceImpl = function
 let (|Ident|) (s : Ident) = 
     let ident = s.idText
     match ident with
-    | "`global`" -> "global"
-    | _ -> QuoteIdentifierIfNeeded ident
+    | "`global`" -> "global", s.idRange
+    | _ -> QuoteIdentifierIfNeeded ident, s.idRange
 
 let (|LongIdent|) (li : LongIdent) =
-    li 
-    |> Seq.map (fun x -> if x.idText = MangledGlobalName then "global" else (|Ident|) x) 
-    |> String.concat "."
-    |> fun s ->
-        // Assume that if it starts with base, it's going to be the base keyword
-        if String.startsWithOrdinal "``base``." s then
-            String.Join("", "base.", s.[9..])
-        else s
+    let is, rs =
+        li 
+        |> Seq.map (fun x -> if x.idText = MangledGlobalName then "global", x.idRange else (|Ident|) x) 
+        |> Seq.toList
+        |> List.unzip
+    
+    let range = List.fold (fun state elem -> unionRanges state elem) (List.head rs) rs
+    let ident =
+        is
+        |> List.toSeq
+        |> String.concat "."
+        |> fun s ->
+            // Assume that if it starts with base, it's going to be the base keyword
+            if String.startsWithOrdinal "``base``." s then
+                String.Join("", "base.", s.[9..])
+            else s
+    ident, range
 
 let inline (|LongIdentWithDots|) (LongIdentWithDots(LongIdent s, _)) = s
 
@@ -132,7 +141,7 @@ let (|OpName|) (x : Identifier) =
         else s'
     else
         match x with
-        | Id(Ident s) | LongId(LongIdent s) -> 
+        | Id(Ident (s, _)) | LongId(LongIdent (s, _)) -> 
             DecompileOpName s
 
 /// Operators in their declaration form
@@ -146,12 +155,12 @@ let (|OpNameFull|) (x : Identifier) =
         else sprintf "(%s)" s'
     else
         match x with
-        | Id(Ident s) | LongId(LongIdent s) -> 
+        | Id(Ident (s, _)) | LongId(LongIdent (s, _)) -> 
             DecompileOpName s
 
 // Type params
 
-let inline (|Typar|) (SynTypar.Typar(Ident s, req , _)) =
+let inline (|Typar|) (SynTypar.Typar(Ident (s, _), req , _)) =
     match req with
     | NoStaticReq -> (s, false)
     | HeadTypeStaticReq -> (s, true)
@@ -187,7 +196,7 @@ let (|Measure|) x =
             sprintf "%s^%s" s n
         | SynMeasure.Seq(ms, _) ->
             List.map loop ms |> String.concat " "
-        | SynMeasure.Named(LongIdent s, _) -> s
+        | SynMeasure.Named(LongIdent (s, _), _) -> s
     sprintf "<%s>" <| loop x
 
 /// Lose information about kinds of literals
@@ -244,8 +253,8 @@ let (|SigModuleOrNamespace|) (SynModuleOrNamespaceSig.SynModuleOrNamespaceSig(Lo
 // Attribute
 
 let (|Attribute|) (a : SynAttribute) =
-    let (LongIdentWithDots s) = a.TypeName
-    (s, a.ArgExpr, Option.map (|Ident|) a.Target, a.Range)
+    let (LongIdentWithDots (s, _)) = a.TypeName
+    (s, a.ArgExpr, Option.map ((|Ident|) >> fst) a.Target, a.Range)
 
 // Access modifiers
 
@@ -264,12 +273,12 @@ let (|ParsedHashDirective|) (ParsedHashDirective(s, ss, _)) =
 // Module declarations (10 cases)
 
 let (|Open|_|) = function
-    | SynModuleDecl.Open(LongIdentWithDots s, _) ->
+    | SynModuleDecl.Open(LongIdentWithDots (s, _), _) ->
         Some s
     | _ -> None
 
 let (|ModuleAbbrev|_|) = function
-    | SynModuleDecl.ModuleAbbrev(Ident s1, LongIdent s2, _) ->
+    | SynModuleDecl.ModuleAbbrev(Ident (s1, _), LongIdent (s2, _), _) ->
         Some(s1, s2)
     | _ -> None
 
@@ -309,7 +318,7 @@ let (|Types|_|) = function
     | _ -> None
 
 let (|NestedModule|_|) = function
-    | SynModuleDecl.NestedModule(SynComponentInfo.ComponentInfo(ats, _, _, LongIdent s, px, _, ao, _), _, xs, _, _) ->
+    | SynModuleDecl.NestedModule(SynComponentInfo.ComponentInfo(ats, _, _, LongIdent (s, _), px, _, ao, _), _, xs, _, _) ->
         Some(ats, px, ao, s, xs)
     | _ -> None
 
@@ -321,12 +330,12 @@ let (|Exception|_|) = function
 // Module declaration signatures (8 cases)
 
 let (|SigOpen|_|) = function
-    | SynModuleSigDecl.Open(LongIdent s, _) ->
+    | SynModuleSigDecl.Open(LongIdent (s, _), _) ->
         Some s
     | _ -> None
 
 let (|SigModuleAbbrev|_|) = function
-    | SynModuleSigDecl.ModuleAbbrev(Ident s1, LongIdent s2, _) ->
+    | SynModuleSigDecl.ModuleAbbrev(Ident (s1, _), LongIdent (s2, _), _) ->
         Some(s1, s2)
     | _ -> None
 
@@ -351,7 +360,7 @@ let (|SigTypes|_|) = function
     | _ -> None
 
 let (|SigNestedModule|_|) = function
-    | SynModuleSigDecl.NestedModule(SynComponentInfo.ComponentInfo(ats, _, _, LongIdent s, px, _, ao, _), _, xs, _) -> 
+    | SynModuleSigDecl.NestedModule(SynComponentInfo.ComponentInfo(ats, _, _, LongIdent (s, _), px, _, ao, _), _, xs, _) -> 
         Some(ats, px, ao, s, xs)
     | _ -> None
 
@@ -374,7 +383,7 @@ let (|ExceptionDef|) (SynExceptionDefn.SynExceptionDefn(SynExceptionDefnRepr.Syn
 let (|SigExceptionDef|) (SynExceptionSig.SynExceptionSig(SynExceptionDefnRepr.SynExceptionDefnRepr(ats, uc, _, px, ao, _), ms, _)) =
     (ats, px, ao, uc, ms)
 
-let (|UnionCase|) (SynUnionCase.UnionCase(ats, Ident s, uct, px, ao, _)) =
+let (|UnionCase|) (SynUnionCase.UnionCase(ats, Ident (s, _), uct, px, ao, _)) =
     (ats, px, ao, s, uct)
 
 let (|UnionCaseType|) = function
@@ -383,7 +392,7 @@ let (|UnionCaseType|) = function
         failwith "UnionCaseFullType should be used internally only."
 
 let (|Field|) (SynField.Field(ats, isStatic, ido, t, isMutable, px, ao, _)) =
-    (ats, px, ao, isStatic, isMutable, t, Option.map (|Ident|) ido)
+    (ats, px, ao, isStatic, isMutable, t, Option.map ((|Ident|) >> fst) ido)
 
 let (|EnumCase|) (SynEnumCase.EnumCase(ats, Ident s, c, px, r)) =
     (ats, px, s, (c, r))
@@ -396,7 +405,7 @@ let (|MDNestedType|_|) = function
     | _ -> None
 
 let (|MDOpen|_|) = function
-    | SynMemberDefn.Open(LongIdent s, _) ->
+    | SynMemberDefn.Open(LongIdent (s, _), _) ->
         Some s
     | _ -> None
 
@@ -416,7 +425,7 @@ let (|MDValField|_|) = function
 
 let (|MDImplicitCtor|_|) = function
     | SynMemberDefn.ImplicitCtor(ao, ats,ps, ido, _) ->
-        Some(ats, ao, ps, Option.map (|Ident|) ido)
+        Some(ats, ao, ps, Option.map ((|Ident|) >> fst) ido)
     | _ -> None
 
 let (|MDMember|_|) = function
@@ -429,7 +438,7 @@ let (|MDLetBindings|_|) = function
     | _ -> None
 
 let (|MDAbstractSlot|_|) = function
-    | SynMemberDefn.AbstractSlot(ValSpfn(ats, Ident s, tds, t, vi, _, _, px, ao, _, _), mf, _) ->
+    | SynMemberDefn.AbstractSlot(ValSpfn(ats, Ident (s, _), tds, t, vi, _, _, px, ao, _, _), mf, _) ->
         Some(ats, px, ao, s, t, vi, tds, mf)
     | _ -> None
 
@@ -439,7 +448,7 @@ let (|MDInterface|_|) = function
     | _ -> None
 
 let (|MDAutoProperty|_|) = function
-    | SynMemberDefn.AutoProperty(ats, isStatic, Ident s, typeOpt, mk, memberKindToMemberFlags, px, ao, e, _ , _) ->
+    | SynMemberDefn.AutoProperty(ats, isStatic, Ident (s, _), typeOpt, mk, memberKindToMemberFlags, px, ao, e, _ , _) ->
         Some(ats, px, ao, mk, e, s, isStatic, typeOpt, memberKindToMemberFlags)
     | _ -> None
 
@@ -486,7 +495,7 @@ let (|MFMember|MFStaticMember|MFConstructor|MFOverride|) (mf : MemberFlags) =
 
 let (|DoBinding|LetBinding|MemberBinding|PropertyBinding|ExplicitCtor|) = function
     | SynBinding.Binding(ao, _, _, _, ats, px, SynValData(Some MFConstructor, _, ido), pat, _, expr, _, _) ->
-        ExplicitCtor(ats, px, ao, pat, expr, Option.map (|Ident|) ido)
+        ExplicitCtor(ats, px, ao, pat, expr, Option.map ((|Ident|) >> fst) ido)
     | SynBinding.Binding(ao, _, isInline, _, ats, px, SynValData(Some(MFProperty _ as mf), _, _), pat, _, expr, _, _) ->
         PropertyBinding(ats, px, ao, isInline, mf, pat, expr)
     | SynBinding.Binding(ao, _, isInline, _, ats, px, SynValData(Some mf, _, _), pat, _, expr, _, _) ->
@@ -571,7 +580,7 @@ let (|While|_|) = function
     | _ -> None
 
 let (|For|_|) = function 
-    | SynExpr.For(_, Ident s, e1, isUp, e2, e3, _) ->
+    | SynExpr.For(_, Ident (s, _), e1, isUp, e2, e3, _) ->
         Some(s, e1, e2, e3, isUp)
     | _ -> None
 
@@ -648,9 +657,9 @@ let (|Tuple|_|) = function
 
 let (|IndexedVar|_|) = function
     // We might have to narrow scope of this pattern to avoid incorrect usage
-    | SynExpr.App(_, _, SynExpr.LongIdent(_, LongIdentWithDots "Microsoft.FSharp.Core.Some", _, _), e, _) -> 
+    | SynExpr.App(_, _, SynExpr.LongIdent(_, LongIdentWithDots ("Microsoft.FSharp.Core.Some", _), _, _), e, _) -> 
         Some(Some e)
-    | SynExpr.LongIdent(_, LongIdentWithDots "Microsoft.FSharp.Core.None", _, _) -> Some None
+    | SynExpr.LongIdent(_, LongIdentWithDots ("Microsoft.FSharp.Core.None", _), _, _) -> Some None
     | _ -> None
 
 let (|Indexer|) = function
@@ -797,7 +806,7 @@ let (|DotIndexedGet|_|) = function
     | _ -> None
 
 let (|DotGet|_|) = function
-    | SynExpr.DotGet(e, _, LongIdentWithDots s, _) ->
+    | SynExpr.DotGet(e, _, LongIdentWithDots (s, _), _) ->
         Some(e, s)
     | _ -> None
 
@@ -816,7 +825,7 @@ let (|DotGetAppSpecial|_|) = function
     | _ -> None
 
 let (|DotSet|_|) = function
-    | SynExpr.DotSet(e1, LongIdentWithDots s, e2, _) ->
+    | SynExpr.DotSet(e1, LongIdentWithDots (s, _), e2, _) ->
         Some(e1, s, e2)
     | _ -> None
 
@@ -844,7 +853,7 @@ let (|ObjExpr|_|) = function
     | _ -> None
 
 let (|LongIdentSet|_|) = function
-    | SynExpr.LongIdentSet(LongIdentWithDots s, e, _) ->
+    | SynExpr.LongIdentSet(LongIdentWithDots (s, _), e, _) ->
         Some(s, e)
     | _ -> None
 
@@ -877,7 +886,7 @@ let (|UnsupportedExpr|_|) = function
 // Patterns (18 cases, lacking to handle 2 cases)
 
 let (|PatOptionalVal|_|) = function
-    | SynPat.OptionalVal(Ident s, _) ->
+    | SynPat.OptionalVal(Ident (s, _), _) ->
         Some s
     | _ -> None
 
@@ -935,7 +944,7 @@ let (|PatLongIdent|_|) = function
         | SynConstructorArgs.Pats ps -> 
             Some(ao, s, List.map (fun p -> (None, p)) ps, tpso)
         | SynConstructorArgs.NamePatPairs(nps, _) ->
-            Some(ao, s, List.map (fun (Ident ident, p) -> (Some ident, p)) nps, tpso)
+            Some(ao, s, List.map (fun (Ident (ident, _), p) -> (Some ident, p)) nps, tpso)
     | _ -> None
 
 let (|PatParen|_|) = function
@@ -964,7 +973,7 @@ let (|SPAttrib|SPId|SPTyped|) = function
     | SynSimplePat.Attrib(sp, ats, _) ->
         SPAttrib(ats, sp)
     // Not sure compiler generated SPIds are used elsewhere.
-    | SynSimplePat.Id(Ident s, _, isGen, _, isOptArg, _) ->
+    | SynSimplePat.Id(Ident (s, _), _, isGen, _, isOptArg, _) ->
         SPId(s, isOptArg, isGen)
     | SynSimplePat.Typed(sp, t, _) ->
         SPTyped(sp, t)
@@ -1087,10 +1096,10 @@ let (|TCSimple|TCDelegate|) = function
     | TyconILAssemblyCode -> TCSimple TCILAssemblyCode
     | TyconDelegate(t, vi) -> TCDelegate(t, vi)
 
-let (|TypeDef|) (SynTypeDefn.TypeDefn(SynComponentInfo.ComponentInfo(ats, tds, tcs, LongIdent s, px, _, ao, _) , tdr, ms, _)) =
-    (ats, px, ao, tds, tcs, tdr, ms, s)
+let (|TypeDef|) (SynTypeDefn.TypeDefn(SynComponentInfo.ComponentInfo(ats, tds, tcs, LongIdent (s, sr), px, _, ao, _) , tdr, ms, _)) =
+    (ats, px, ao, tds, tcs, tdr, ms, s, sr)
 
-let (|SigTypeDef|) (SynTypeDefnSig.TypeDefnSig(SynComponentInfo.ComponentInfo(ats, tds, tcs, LongIdent s, px, _, ao, _) , tdr, ms, _)) =
+let (|SigTypeDef|) (SynTypeDefnSig.TypeDefnSig(SynComponentInfo.ComponentInfo(ats, tds, tcs, LongIdent (s, _), px, _, ao, _) , tdr, ms, _)) =
     (ats, px, ao, tds, tcs, tdr, ms, s)
 
 let (|TyparDecl|) (SynTyparDecl.TyparDecl(ats, tp)) =
@@ -1162,7 +1171,7 @@ let (|TApp|_|) = function
     | _ -> None
 
 let (|TLongIdentApp|_|) = function
-    | SynType.LongIdentApp(t, LongIdentWithDots s, _, ts, _, _, _) ->
+    | SynType.LongIdentApp(t, LongIdentWithDots (s, _), _, ts, _, _, _) ->
         Some(t, s, ts)
     | _ -> None    
 
@@ -1177,7 +1186,7 @@ let (|TWithGlobalConstraints|_|) = function
     | _ -> None
 
 let (|TLongIdent|_|) = function
-    | SynType.LongIdent(LongIdentWithDots s) ->
+    | SynType.LongIdent(LongIdentWithDots (s, _)) ->
         Some s
     | _ -> None
 
@@ -1221,14 +1230,14 @@ let (|Val|) (ValSpfn(ats, IdentOrKeyword(OpNameFull s), tds, t, vi, _, _, px, ao
 
 // Misc
 
-let (|RecordFieldName|) ((LongIdentWithDots s, _) : RecordFieldName, eo : SynExpr option, _) = (s, eo)
+let (|RecordFieldName|) ((LongIdentWithDots (s, _), _) : RecordFieldName, eo : SynExpr option, _) = (s, eo)
 
-let (|PatRecordFieldName|) ((LongIdent s1, Ident s2), p) = (s1, s2, p)
+let (|PatRecordFieldName|) ((LongIdent (s1, _), Ident (s2, _)), p) = (s1, s2, p)
 
 let (|ValInfo|) (SynValInfo(aiss, ai)) = (aiss, ai)
 
 let (|ArgInfo|) (SynArgInfo(attribs, isOpt, ido)) =
-    (attribs, Option.map (|Ident|) ido, isOpt)
+    (attribs, Option.map ((|Ident|) >> fst) ido, isOpt)
 
 /// Extract function arguments with their associated info
 let (|FunType|) (t, ValInfo(argTypes, returnType)) = 

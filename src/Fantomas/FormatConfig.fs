@@ -301,10 +301,14 @@ let internal sepWild = !- "_"
 let internal sepNone = id
 let internal sepBar = !- "| "
 
+let internal nullCtx (ctx : Context) =
+    ctx.RangeOfPreviousASTElement <- None
+    ctx
+
 let internal sepConstructs (currentRange : range) (ctx : Context) =
     match ctx.RangeOfPreviousASTElement with
     | None -> ctx
-    | Some r -> ctx |> rep (2 + 0 * (r.EndLine - currentRange.StartLine)) sepNln
+    | Some r -> ctx |> rep (currentRange.StartLine - r.EndLine) sepNln
 
 /// opening token of list
 let internal sepOpenL (ctx : Context) =  

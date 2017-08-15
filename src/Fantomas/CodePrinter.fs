@@ -41,10 +41,10 @@ type ASTContext =
 let rec addSpaceBeforeParensInFunCall functionOrMethod arg = 
     match functionOrMethod, arg with
     | _, ConstExpr(Const "()", _) -> false
-    | SynExpr.LongIdent(_, LongIdentWithDots s, _, _), _ ->
+    | SynExpr.LongIdent(_, LongIdentWithDots (s, _), _, _), _ ->
         let parts = s.Split '.'
         not <| Char.IsUpper parts.[parts.Length - 1].[0]
-    | SynExpr.Ident(Ident s), _ -> not <| Char.IsUpper s.[0]
+    | SynExpr.Ident(Ident (s, _)), _ -> not <| Char.IsUpper s.[0]
     | SynExpr.TypeApp(e, _, _, _, _, _, _), _ -> addSpaceBeforeParensInFunCall e arg
     | _ -> true
 
@@ -79,7 +79,7 @@ and genParsedHashDirective (ParsedHashDirective(h, s)) =
 
     !- "#" -- h +> sepSpace +> col sepSpace s printArgument
 
-and genModuleOrNamespace astContext (ModuleOrNamespace(ats, px, ao, s, mds, isModule)) =
+and genModuleOrNamespace astContext (ModuleOrNamespace(ats, px, ao, (s, _), mds, isModule)) =
     genPreXmlDoc px
     +> genAttributes astContext ats
     +> ifElse (String.Equals(s, astContext.TopLevelModuleName, StringComparison.InvariantCultureIgnoreCase)) sepNone 
@@ -87,7 +87,7 @@ and genModuleOrNamespace astContext (ModuleOrNamespace(ats, px, ao, s, mds, isMo
             +> opt sepSpace ao genAccess +> ifElse (s = "") (!- "global") (!- s) +> rep 2 sepNln) // deal with rep 2 sepNln
     +> genModuleDeclList astContext mds
 
-and genSigModuleOrNamespace astContext (SigModuleOrNamespace(ats, px, ao, s, mds, isModule)) =
+and genSigModuleOrNamespace astContext (SigModuleOrNamespace(ats, px, ao, (s, _), mds, isModule)) =
     genPreXmlDoc px
     +> genAttributes astContext ats
     +> ifElse (String.Equals(s, astContext.TopLevelModuleName, StringComparison.InvariantCultureIgnoreCase)) sepNone 
@@ -689,13 +689,16 @@ and genIndexers astContext = function
             +>ifElse es.IsEmpty sepNone (sepComma +> genIndexers astContext es)
     | _ -> sepNone
 
-and genTypeDefn astContext (TypeDef(ats, px, ao, tds, tcs, tdr, ms, s) as td) = 
+and genTypeDefn astContext (TypeDef(ats, px, ao, tds, tcs, tdr, ms, s, sr) as td) = 
+    let td1 = td
     let typeName = 
         genPreXmlDoc px 
         +> ifElse astContext.IsFirstChild (genAttributes astContext ats -- "type ") 
             (!- "and " +> genOnelinerAttributes astContext ats) 
         +> opt sepSpace ao genAccess -- s
+        +> saveRange sr
         +> genTypeParam astContext tds tcs
+        //+> saveRange 
     let gen =
         match tdr with
         | Simple(TDSREnum ecs) ->
@@ -751,7 +754,8 @@ and genTypeDefn astContext (TypeDef(ats, px, ao, tds, tcs, tdr, ms, s) as td) =
 
         | ExceptionRepr(ExceptionDefRepr(ats, px, ao, uc)) ->
             genExceptionBody astContext ats px ao uc
-    gen +> saveRange td.Range
+    System.Diagnostics.Debug.WriteLine("{0}", td1.Range)
+    nullCtx +> gen +> saveRange td1.Range
 
 and genSigTypeDefn astContext (SigTypeDef(ats, px, ao, tds, tcs, tdr, ms, s) as std) =
     let typeName = 
@@ -1002,7 +1006,7 @@ and genClause astContext hasBar (Clause(p, e, eo) as clause) =
 
 /// Each multiline member definition has a pre and post new line. 
 and genMemberDefnList astContext = function
-    | [x] -> sepNln +> genMemberDefn astContext x
+    | [x] -> genMemberDefn astContext x
 
     | MDOpenL(xs, ys) ->
         fun ctx ->
